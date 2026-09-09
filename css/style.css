@@ -1,0 +1,672 @@
+/* ============ GAMEHUB ============
+   Misma paleta y componentes que AsianSecret, a propósito: dorado #C9A961,
+   rojo #B0342A, negro cálido, tarjetas con marco dorado y modal con doble
+   filete. La idea es que se sienta la misma "casa" de diseño en otra app. */
+
+:root {
+  --negro: #0a0908;
+  --negro-2: #12100e;
+  --carta: #16130f;
+  --carta-alta: #1d1913;
+  --borde: #2e2620;
+
+  --oro: #c9a961;
+  --oro-claro: #e6cf81;
+  --oro-oscuro: #8a7440;
+  --oro-rgb: 201, 169, 97;
+
+  --rojo: #b0342a;
+  --rojo-claro: #d1483a;
+  --rojo-profundo: #6e1f17;
+  --rojo-rgb: 176, 52, 42;
+
+  --tinta: #1c3460;
+  --tinta-rgb: 28, 52, 96;
+
+  --verde: #4d8a63;
+  --verde-claro: #6dae82;
+
+  --blanco: #fbf8ee;
+  --tenue: #a89c8e;
+
+  --radio: 14px;
+  --sombra: 0 18px 50px rgba(0, 0, 0, 0.65);
+  --transicion: 320ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  font-size: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { overflow-x: clip; }
+
+/* ---------------- scrollbars con el tema de la página, no el del
+   navegador por defecto — aplica a toda la página y a cualquier panel
+   con scroll propio (modales, tablero en pantalla completa, etc). ---- */
+html { scrollbar-width: thin; scrollbar-color: rgba(var(--oro-rgb), 0.55) rgba(10,9,8,0.5); }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: rgba(10,9,8,0.5); }
+::-webkit-scrollbar-thumb {
+  background-color: var(--oro-oscuro);
+  background-image: linear-gradient(180deg, var(--oro), var(--oro-oscuro));
+  border-radius: 40px; border: 2px solid rgba(10,9,8,0.6); background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background-image: linear-gradient(180deg, var(--oro-claro), var(--oro)); background-clip: padding-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+body {
+  min-height: 100vh;
+  color: var(--blanco);
+  background: var(--negro);
+  font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Fondo fijo con un resplandor dorado apagado en el centro, igual criterio
+   que AsianSecret: una escena quieta detrás del contenido, no una textura
+   plana. En la portada (body.menu-fondo) esa escena es la foto elegida;
+   en el tablero se apaga para no competir con el juego. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  transition: opacity 420ms ease;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -10%, rgba(var(--oro-rgb), 0.10), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(var(--rojo-rgb), 0.08), transparent 60%),
+    var(--negro);
+}
+body.menu-fondo::before {
+  background:
+    radial-gradient(ellipse 70% 50% at 50% -10%, rgba(var(--oro-rgb), 0.12), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(var(--rojo-rgb), 0.10), transparent 60%),
+    linear-gradient(180deg, rgba(10,9,8,0.45) 0%, rgba(9,8,7,0.72) 55%, var(--negro) 96%),
+    url("../assets/fondo-menu.jpg") center 32% / cover no-repeat;
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(var(--oro-rgb), 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--oro-rgb), 0.035) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);
+}
+
+h1, h2, h3, .serif { font-family: Georgia, "Times New Roman", serif; font-weight: 700; letter-spacing: 0.3px; }
+.oro { color: var(--oro); }
+.rojo { color: var(--rojo-claro); }
+.tenue { color: var(--tenue); }
+.oculto { display: none !important; }
+
+.envoltorio { max-width: 1180px; margin: 0 auto; padding: 0 22px 100px; }
+/* Pantalla completa: se saca el techo de 1180px para que el tablero/mapa
+   pueda usar el ancho real de la pantalla en vez de quedar en una columna
+   angosta flotando en medio de una monitor grande. */
+.pantalla-completa .envoltorio { max-width: none; padding: 0 clamp(12px, 3vw, 40px) 24px; }
+
+/* ---------------- encabezado ---------------- */
+.cabecera { padding: 46px 0 30px; text-align: center; position: relative; }
+.logo-marca {
+  display: inline-flex; align-items: center; gap: 14px;
+  font-family: Georgia, serif; font-weight: 700;
+}
+.logo-tablero {
+  width: 46px; height: 46px; border-radius: 10px;
+  background: linear-gradient(160deg, #caa15c 0%, #a97f3c 100%);
+  position: relative;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.15);
+}
+.logo-tablero::before {
+  content: "";
+  position: absolute; inset: 7px;
+  background-image:
+    linear-gradient(#2a2015 1px, transparent 1px),
+    linear-gradient(90deg, #2a2015 1px, transparent 1px);
+  background-size: calc(100% / 4) calc(100% / 4);
+  opacity: 0.55;
+}
+.logo-tablero::after {
+  content: "";
+  position: absolute; width: 10px; height: 10px; border-radius: 50%;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 30%, #2a2620, #060504 72%);
+  box-shadow: 9px -9px 0 0 #f4efe2, 9px 9px 0 0 #060504, -9px 9px 0 0 #f4efe2;
+}
+.logo-texto { font-size: 2rem; letter-spacing: 1px; }
+.logo-texto .hub { color: var(--oro); }
+.lema {
+  margin-top: 10px; color: var(--tenue); font-size: 0.95rem;
+  letter-spacing: 0.4px;
+}
+
+/* Pantalla completa: la cabecera se achica al mínimo (sin la frase debajo
+   del logo, logo más chico) para que casi toda la pantalla quede para el
+   tablero/mapa — pero sin desaparecer del todo, porque ahí siguen los
+   controles de música, que tienen que seguir alcanzables. */
+.pantalla-completa .cabecera { padding: 14px 0 10px; }
+.pantalla-completa .lema { display: none; }
+.pantalla-completa .logo-tablero { width: 30px; height: 30px; }
+.pantalla-completa .logo-texto { font-size: 1.3rem; }
+.pantalla-completa .reproductor-musica-cabecera { margin-top: 8px; }
+
+/* reproductor en la cabecera principal: centrado como el resto (el padre
+   es text-align:center), visible en el menú y en las dos partidas porque
+   la cabecera nunca se oculta. */
+.reproductor-musica-cabecera { display: inline-flex; margin-top: 16px; }
+.volumen-musica {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--carta); border: 1px solid var(--borde); border-radius: 40px;
+  padding: 9px 16px 9px 14px; font-size: 0.86rem; color: var(--tenue);
+}
+.volumen-musica input[type="range"] {
+  width: 90px; accent-color: var(--oro);
+}
+
+/* ---------------- barra ---------------- */
+.barra {
+  position: sticky; top: 0; z-index: 40;
+  margin-inline: calc(50% - 50vw);
+  padding: 12px calc(50vw - 50%);
+  background: rgba(10, 9, 8, 0.86);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--borde);
+  display: flex; justify-content: center; gap: 6px;
+}
+.barra button {
+  background: none; border: none; color: var(--tenue);
+  font: inherit; font-weight: 600; font-size: 0.92rem;
+  padding: 8px 16px; border-radius: 40px; cursor: pointer;
+  transition: all var(--transicion);
+}
+.barra button:hover { color: var(--blanco); }
+.barra button.activo { color: #17130c; background: linear-gradient(135deg, var(--oro), var(--oro-oscuro)); }
+
+/* ---------------- grilla de juegos ---------------- */
+.grilla-juegos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 22px;
+  margin-top: 34px;
+}
+
+.tarjeta-juego {
+  position: relative;
+  aspect-ratio: 4 / 3.1;
+  border-radius: var(--radio);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(var(--oro-rgb), 0.55);
+  background: var(--carta);
+  box-shadow: 0 0 0 1px rgba(6, 5, 5, 0.75), 0 10px 26px rgba(0, 0, 0, 0.45);
+  transition: transform var(--transicion), border-color var(--transicion), box-shadow var(--transicion);
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+}
+.tarjeta-juego:hover {
+  transform: translateY(-5px);
+  border-color: var(--oro-claro);
+  box-shadow: 0 0 0 1px rgba(6,5,5,0.75), 0 0 0 4px rgba(var(--oro-rgb), 0.2), 0 20px 44px rgba(0,0,0,0.62);
+}
+.tarjeta-juego:focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; }
+
+.tarjeta-juego .fondo {
+  position: absolute; inset: 0;
+  background: linear-gradient(160deg, var(--tinte, #2a2119), #100e0b 78%);
+}
+.tarjeta-juego .fondo::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 32%, rgba(255,255,255,0.08), transparent 62%);
+}
+.tarjeta-juego[data-juego="go"]     { --tinte: #6b4f1a; }
+.tarjeta-juego[data-juego="ajedrez"]{ --tinte: #2b3a55; }
+.tarjeta-juego[data-juego="damas"]  { --tinte: #64201a; }
+
+.tarjeta-juego .icono {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 4rem;
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.7));
+  transition: transform 720ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tarjeta-juego:hover .icono { transform: scale(1.08) rotate(-2deg); }
+
+.tarjeta-juego .velo {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top,
+    rgba(6,5,4,0.95) 0%, rgba(6,5,4,0.6) 22%, rgba(6,5,4,0.1) 46%, transparent 60%);
+}
+
+.tarjeta-juego .cuerpo { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 0 18px 16px; }
+.tarjeta-juego .nombre { font-family: Georgia, serif; font-size: 1.24rem; font-weight: 700; text-shadow: 0 2px 12px rgba(0,0,0,0.9); }
+.tarjeta-juego .desc { margin-top: 4px; font-size: 0.82rem; color: var(--tenue); text-shadow: 0 2px 8px rgba(0,0,0,0.85); }
+
+.pronto-badge {
+  position: absolute; top: 12px; right: 12px; z-index: 2;
+  padding: 4px 11px; border-radius: 40px; font-size: 0.68rem; font-weight: 700;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--blanco); background: rgba(8,7,6,0.66);
+  border: 1px solid rgba(var(--oro-rgb), 0.4); backdrop-filter: blur(6px);
+}
+
+/* ============================================================
+   MODAL — mismo marco de dos filetes que AsianSecret
+   ============================================================ */
+.modal-fondo {
+  position: fixed; inset: 0; z-index: 100;
+  display: grid; place-items: center; padding: 20px;
+  background: rgba(4, 3, 3, 0.72);
+  backdrop-filter: blur(16px) saturate(120%);
+  opacity: 0; pointer-events: none;
+  transition: opacity 360ms ease;
+}
+.modal-fondo.abierto { opacity: 1; pointer-events: auto; }
+
+.modal {
+  position: relative;
+  width: min(480px, 100%);
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: linear-gradient(170deg, #1c1811 0%, var(--carta) 42%, #100e0b 100%);
+  border: 2px solid var(--oro-claro);
+  border-radius: 20px;
+  box-shadow:
+    0 0 0 1px rgba(6,5,5,0.92), 0 0 0 6px rgba(var(--oro-rgb), 0.28),
+    0 0 0 7px rgba(6,5,5,0.55), var(--sombra), 0 0 110px rgba(var(--oro-rgb), 0.26);
+  transform: translateY(26px) scale(0.965);
+  opacity: 0;
+  transition: transform 460ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease;
+  padding: 26px 24px 24px;
+}
+.modal-fondo.abierto .modal { transform: translateY(0) scale(1); opacity: 1; }
+.modal::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 4;
+  background: linear-gradient(90deg, transparent, rgba(255,246,224,0.85) 38%, rgba(255,252,240,0.95) 50%, rgba(255,246,224,0.85) 62%, transparent);
+  border-radius: 20px 20px 0 0; pointer-events: none;
+}
+
+.modal-cerrar {
+  position: absolute; top: 14px; right: 14px;
+  width: 36px; height: 36px; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid var(--borde);
+  background: rgba(0,0,0,0.45); color: var(--tenue);
+  font-size: 1.1rem; cursor: pointer; z-index: 3;
+  transition: all var(--transicion);
+}
+.modal-cerrar:hover { color: var(--blanco); border-color: var(--oro); transform: rotate(90deg); background: rgba(var(--rojo-rgb), 0.25); }
+
+.modal-titulo { font-size: 1.3rem; margin-bottom: 4px; padding-right: 30px; }
+.modal-sub { color: var(--tenue); font-size: 0.86rem; margin-bottom: 18px; }
+
+/* ---- pestañas de variante (Go / Atari Go / Survival Go) ---- */
+.tabs {
+  display: flex; gap: 6px; background: var(--negro-2);
+  border: 1px solid var(--borde); border-radius: 40px; padding: 4px; margin-bottom: 6px;
+}
+.tabs button {
+  flex: 1; background: none; border: none; color: var(--tenue);
+  font: inherit; font-weight: 700; font-size: 0.86rem;
+  padding: 9px 6px; border-radius: 40px; cursor: pointer;
+  transition: all var(--transicion);
+}
+.tabs button:hover { color: var(--blanco); }
+.tabs button.activo { color: #17130c; background: linear-gradient(135deg, var(--oro), var(--oro-oscuro)); box-shadow: 0 4px 14px rgba(var(--oro-rgb), 0.25); }
+
+.campo { margin-top: 20px; }
+.campo-fila {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 18px; gap: 14px;
+}
+.campo-label { font-size: 0.92rem; font-weight: 700; }
+.campo-nota { font-size: 0.76rem; color: var(--tenue); margin-top: 2px; }
+
+/* ---- segmentado (vs Bot / Free play, Nigiri/Black/White, tamaños) ---- */
+.segmentado { display: inline-flex; gap: 6px; background: var(--negro-2); border: 1px solid var(--borde); border-radius: 40px; padding: 4px; }
+.segmentado button {
+  background: none; border: none; color: var(--tenue); font: inherit; font-weight: 700; font-size: 0.82rem;
+  padding: 8px 14px; border-radius: 40px; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: all var(--transicion);
+}
+.segmentado button:hover { color: var(--blanco); }
+.segmentado button.activo { color: #17130c; background: linear-gradient(135deg, var(--oro), var(--oro-oscuro)); }
+.punto-color { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.punto-color.negro { background: #1a1712; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); }
+.punto-color.blanco { background: #f4efe2; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2); }
+
+/* ---- nivel del bot ---- */
+.nivel-linea { display: flex; align-items: center; gap: 8px; justify-content: center; margin-top: 14px; font-size: 0.9rem; font-weight: 700; color: var(--oro-claro); }
+.nivel-badge { font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 40px; background: rgba(var(--oro-rgb), 0.16); border: 1px solid rgba(var(--oro-rgb), 0.4); color: var(--oro-claro); }
+.slider-envoltorio { margin-top: 10px; }
+input[type="range"] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 40px;
+  background: linear-gradient(90deg, var(--oro-oscuro), var(--oro) var(--pct, 50%), var(--borde) var(--pct, 50%));
+  outline: none; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--blanco); border: 3px solid var(--oro);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5); cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 50%; background: var(--blanco); border: 3px solid var(--oro); cursor: pointer;
+}
+.slider-etiquetas { display: flex; justify-content: space-between; margin-top: 6px; font-size: 0.72rem; color: var(--tenue); }
+
+/* ---- stepper (handicap) ---- */
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--borde);
+  background: var(--negro-2); color: var(--blanco); font-size: 1.1rem; font-weight: 700;
+  cursor: pointer; display: grid; place-items: center; transition: all var(--transicion);
+}
+.stepper button:hover { border-color: var(--oro); color: var(--oro-claro); }
+.stepper button:disabled { opacity: 0.35; cursor: not-allowed; }
+.stepper .valor { min-width: 22px; text-align: center; font-weight: 700; font-size: 1.05rem; }
+
+/* ---- toggle (switch) ---- */
+.toggle { position: relative; width: 44px; height: 25px; flex-shrink: 0; }
+.toggle input { position: absolute; inset: 0; opacity: 0; cursor: pointer; margin: 0; }
+.toggle .via {
+  position: absolute; inset: 0; border-radius: 40px; background: var(--negro-2);
+  border: 1px solid var(--borde); transition: all var(--transicion);
+}
+.toggle .via::before {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 19px; height: 19px; border-radius: 50%;
+  background: var(--tenue); transition: all var(--transicion);
+}
+.toggle input:checked + .via { background: linear-gradient(135deg, var(--oro), var(--oro-oscuro)); border-color: var(--oro-claro); }
+.toggle input:checked + .via::before { transform: translateX(19px); background: #17130c; }
+
+hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0; }
+
+/* ---- vista previa: cómo se ven el tablero y las piedras elegidas ---- */
+.preview-tablero {
+  display: block; width: 100%; height: auto; border-radius: 12px;
+  border: 1px solid rgba(var(--oro-rgb), 0.35);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+}
+
+/* ---- selector de color/tablero: fila de muestras circulares o rects ---- */
+.fila-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.swatch-piedra {
+  width: 34px; height: 34px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 2px solid var(--borde); background: none; position: relative;
+  transition: all var(--transicion); overflow: hidden;
+}
+.swatch-piedra canvas { width: 100%; height: 100%; display: block; border-radius: 50%; }
+.swatch-piedra:hover { border-color: var(--oro-oscuro); transform: translateY(-1px); }
+.swatch-piedra.activo { border-color: var(--oro-claro); box-shadow: 0 0 0 3px rgba(var(--oro-rgb), 0.28); }
+
+/* muestras de pieza de ajedrez: mismo patrón que .swatch-piedra pero
+   cuadradas (no redondas), para que a simple vista no se confundan con
+   piedras de Go — son piezas, no fichas circulares. */
+.swatch-pieza { border-radius: 9px; }
+.swatch-pieza canvas { border-radius: 6px; }
+
+.swatch-tablero {
+  width: 58px; height: 40px; border-radius: 8px; padding: 0; cursor: pointer;
+  border: 2px solid var(--borde); overflow: hidden; position: relative;
+  transition: all var(--transicion);
+}
+.swatch-tablero canvas { width: 100%; height: 100%; display: block; }
+.swatch-tablero:hover { border-color: var(--oro-oscuro); transform: translateY(-1px); }
+.swatch-tablero.activo { border-color: var(--oro-claro); box-shadow: 0 0 0 3px rgba(var(--oro-rgb), 0.28); }
+.swatch-tablero .etiqueta {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 0;
+  font-size: 0.58rem; font-weight: 700; text-align: center; color: var(--blanco);
+  background: rgba(0,0,0,0.55); text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+.btn-jugar {
+  display: block; width: 100%; margin-top: 24px;
+  padding: 15px; border-radius: 40px; border: none; cursor: pointer;
+  font: inherit; font-weight: 800; font-size: 1rem; letter-spacing: 0.3px;
+  color: #17130c;
+  background: linear-gradient(135deg, var(--oro-claro), var(--oro) 45%, var(--oro-oscuro));
+  box-shadow: 0 10px 26px rgba(var(--oro-rgb), 0.32);
+  transition: all var(--transicion);
+}
+.btn-jugar:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(var(--oro-rgb), 0.42); }
+.btn-jugar:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.aviso-pronto {
+  margin-top: 18px; padding: 16px; border-radius: 12px;
+  background: rgba(var(--rojo-rgb), 0.1); border: 1px solid rgba(var(--rojo-rgb), 0.35);
+  color: var(--tenue); font-size: 0.88rem; text-align: center;
+}
+
+/* ============================================================
+   TABLERO
+   ============================================================ */
+.vista-tablero { padding-top: 26px; }
+/* Pantalla completa se pide sobre el <html> entero (ver app.js — así el
+   modal de resultado, que vive fuera de esta sección, se sigue viendo),
+   así que acá se engancha por la clase que ese mismo código le pone al
+   <html>, no por :fullscreen en la sección. */
+.pantalla-completa .vista-tablero {
+  background: var(--negro);
+  padding: 26px 26px 40px;
+  min-height: 100vh;
+  overflow-y: auto;
+}
+.tablero-cabecera {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 18px;
+}
+/* Pantalla completa: la fila de acciones (rendirse, opciones, salir de
+   pantalla completa, etc) queda pegada arriba en vez de desplazarse con el
+   tablero, para no tener que salir de pantalla completa para alcanzarla. */
+.pantalla-completa .tablero-cabecera {
+  position: sticky; top: 0; z-index: 20;
+  margin: -26px -26px 16px; padding: 14px 26px 12px;
+  background: rgba(8,7,6,0.92); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--borde);
+}
+.tablero-titulo { display: flex; align-items: center; gap: 12px; }
+.btn-volver {
+  background: none; border: 1px solid var(--borde); color: var(--tenue);
+  border-radius: 40px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer;
+  transition: all var(--transicion);
+}
+.btn-volver:hover { border-color: var(--oro); color: var(--blanco); }
+
+.turno-indicador {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 16px; border-radius: 40px; background: var(--carta);
+  border: 1px solid var(--borde); font-weight: 700; font-size: 0.9rem;
+}
+.turno-piedra { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+
+.acciones-tablero { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-accion {
+  background: var(--carta); border: 1px solid var(--borde); color: var(--blanco);
+  border-radius: 40px; padding: 9px 18px; font: inherit; font-weight: 700; font-size: 0.86rem;
+  cursor: pointer; transition: all var(--transicion);
+}
+.btn-accion:hover { border-color: var(--oro); }
+.btn-accion.rojo { border-color: rgba(var(--rojo-rgb), 0.5); color: var(--rojo-claro); }
+.btn-accion.rojo:hover { background: rgba(var(--rojo-rgb), 0.15); border-color: var(--rojo-claro); }
+.btn-accion:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* reproductor de música: cluster compacto de anterior/play-pausa/siguiente,
+   visible siempre en la cabecera (antes sólo un toggle escondido dentro de
+   Opciones, difícil de encontrar). */
+.reproductor-musica { display: flex; gap: 6px; align-items: center; }
+.btn-musica-nav { padding: 9px 13px; }
+#btn-musica-play.activo-musica { border-color: var(--oro); color: var(--oro-claro); }
+
+/* Antes este panel sólo tenía padding y centraba un tablero de ancho fijo
+   adentro (flex + justify-content), así que el panel en sí no tenía una
+   altura propia — la altura la definía el canvas, quedando de nuevo un
+   cuadrado más chico flotando con aire alrededor. Ahora el panel define su
+   propia altura (según el alto de ventana) y el canvas llena ese espacio
+   entero, sin padding ni centrado de por medio. */
+.tablero-envoltorio {
+  height: min(78vh, 860px);
+  /* Azul tinta en vez de dorado cálido acá: contra la madera del tablero
+     (siempre cálida) un fondo frío la hace resaltar en lugar de mezclarse
+     en una sola papilla marrón. */
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 20%, rgba(var(--tinta-rgb), 0.32), transparent 68%),
+    linear-gradient(170deg, #10161f 0%, #12161c 55%, #070a0e 100%);
+  border: 1px solid rgba(var(--oro-rgb), 0.4);
+  border-radius: var(--radio);
+  box-shadow: 0 0 0 1px rgba(6,5,5,0.75), var(--sombra);
+  overflow: hidden;
+}
+.pantalla-completa .tablero-envoltorio {
+  height: min(88vh, 1500px);
+  max-width: 1700px;
+  margin: 0 auto;
+}
+
+/* El tablero de madera, la grilla y las piedras ahora los dibuja Three.js
+   (ver js/board3d.js) directo en un <canvas> que se inserta acá adentro;
+   este div (y el canvas) ocupan el 100% del panel de arriba, sin dejar
+   ningún borde vacío. */
+.tablero-madera { width: 100%; height: 100%; touch-action: none; }
+.tablero-madera canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.tablero-madera:active canvas { cursor: grabbing; }
+
+.panel-lateral {
+  margin-top: 18px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
+}
+
+/* ============================================================
+   TEG — mapa Leaflet (tiles reales oscuros), no una escena Three.js
+   ============================================================ */
+.teg-ayuda {
+  text-align: center; color: var(--tenue); font-size: 0.88rem; margin: 0 0 10px;
+}
+.mapa-envoltorio {
+  height: min(70vh, 760px);
+  border: 1px solid rgba(var(--oro-rgb), 0.4);
+  border-radius: var(--radio);
+  box-shadow: 0 0 0 1px rgba(6,5,5,0.75), var(--sombra);
+  overflow: hidden;
+}
+.pantalla-completa .mapa-envoltorio {
+  height: min(88vh, 1500px);
+  max-width: 1700px;
+  margin: 0 auto;
+}
+.mapa-teg { width: 100%; height: 100%; background: #02060a; }
+
+/* chrome oscuro de Leaflet, mismo criterio que el mapa cyberpunk de donde
+   se sacó la idea: controles de zoom y atribución legibles sobre el tema
+   oscuro en vez del blanco por defecto de la librería. */
+.mapa-teg .leaflet-control-zoom a {
+  background: rgba(20,16,10,0.92); color: var(--oro-claro);
+  border-color: rgba(var(--oro-rgb), 0.35);
+}
+.mapa-teg .leaflet-control-zoom a:hover { background: var(--oro); color: #17130c; }
+.mapa-teg .leaflet-control-attribution {
+  background: rgba(10,8,6,0.75); color: var(--tenue); font-size: 9px;
+}
+.mapa-teg .leaflet-control-attribution a { color: var(--oro-claro); }
+/* ficha de territorio: degradado radial (no un círculo plano) para que se
+   lea con volumen, tipo canica pulida — el color exacto se completa en JS
+   (tegmapa.js) según el dueño. */
+.teg-token-wrap { background: none !important; border: none !important; }
+.teg-token {
+  width: 26px; height: 26px; border-radius: 50%; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(10,8,5,0.85);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.65), inset 0 1px 2px rgba(255,255,255,0.35);
+  transition: box-shadow 160ms ease, transform 120ms ease;
+  cursor: pointer;
+}
+.teg-token:hover { transform: scale(1.08); }
+.teg-token-num {
+  color: #fff; font-weight: 800; font-size: 11px; text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  pointer-events: none;
+}
+/* casilla elegida como origen: aro dorado grueso. */
+.teg-token--seleccion { box-shadow: 0 0 0 3px #ffe08a, 0 2px 6px rgba(0,0,0,0.7); }
+/* objetivos válidos (vecino enemigo atacable / destino de fortificación). */
+.teg-token--resaltado { box-shadow: 0 0 0 3px #ff6a4a, 0 2px 6px rgba(0,0,0,0.7); }
+/* hover: se ilumina todo el continente al que pertenece la ficha, en
+   naranja, para ver de un vistazo qué le falta para el bonus completo. */
+.teg-token--continente {
+  box-shadow: 0 0 0 3px rgba(255,140,40,0.75), 0 0 14px 5px rgba(255,140,40,0.55), inset 0 1px 2px rgba(255,255,255,0.35);
+}
+
+.teg-panel-detalle { margin-top: 18px; display: grid; gap: 16px; }
+.teg-fila-jugador {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0;
+}
+.teg-fila-jugador .punto-color { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 10px; }
+.info-chip {
+  background: var(--carta); border: 1px solid var(--borde); border-radius: 12px;
+  padding: 10px 18px; text-align: center; min-width: 90px;
+}
+.info-chip .num { font-size: 1.2rem; font-weight: 800; color: var(--oro-claro); }
+.info-chip .etq { font-size: 0.72rem; color: var(--tenue); margin-top: 2px; }
+
+/* ---- modal de resultado: el remate de la partida, no una notita al pie ---- */
+.modal-resultado { width: min(420px, 100%); text-align: center; padding: 40px 28px 30px; }
+.resultado-piedra {
+  width: 74px; height: 74px; margin: 0 auto 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 28%, var(--oro-claro), var(--oro) 55%, var(--oro-oscuro) 100%);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.4) inset,
+    0 10px 26px rgba(var(--oro-rgb), 0.5),
+    0 0 60px rgba(var(--oro-rgb), 0.45);
+  animation: resultado-aparece 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.resultado-titulo {
+  font-family: Georgia, serif; font-weight: 700; font-size: 2.1rem;
+  color: var(--oro-claro);
+  text-shadow: 0 0 30px rgba(var(--oro-rgb), 0.55), 0 2px 10px rgba(0,0,0,0.6);
+  animation: resultado-aparece 620ms cubic-bezier(0.16, 1, 0.3, 1) 80ms both;
+}
+.resultado-detalle {
+  margin-top: 10px; color: var(--tenue); font-size: 0.94rem; line-height: 1.5;
+  animation: resultado-aparece 620ms cubic-bezier(0.16, 1, 0.3, 1) 150ms both;
+}
+.resultado-botones {
+  margin-top: 26px; display: flex; gap: 10px;
+  animation: resultado-aparece 620ms cubic-bezier(0.16, 1, 0.3, 1) 220ms both;
+}
+.resultado-botones .btn-accion { flex: 1; }
+.resultado-botones .btn-jugar { flex: 1.4; }
+@keyframes resultado-aparece {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (max-width: 900px) {
+  .tablero-envoltorio, .mapa-envoltorio { height: min(58vh, 620px); }
+  .pantalla-completa .tablero-envoltorio, .pantalla-completa .mapa-envoltorio { height: min(72vh, 900px); }
+  .tablero-cabecera { justify-content: center; text-align: center; }
+  .acciones-tablero { justify-content: center; }
+  .info-chip { min-width: 76px; padding: 8px 12px; }
+}
+
+@media (max-width: 620px) {
+  .modal { width: 100%; padding: 22px 16px 20px; }
+  .grilla-juegos { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .cabecera { padding: 30px 0 20px; }
+  .logo-texto { font-size: 1.5rem; }
+  .envoltorio { padding: 0 14px 70px; }
+  .tablero-envoltorio, .mapa-envoltorio { height: min(48vh, 480px); }
+  .pantalla-completa .vista-tablero { padding: 14px 12px 26px; }
+  .pantalla-completa .tablero-cabecera { margin: -14px -12px 14px; padding: 10px 12px; }
+  .tablero-titulo { width: 100%; justify-content: center; }
+  .acciones-tablero { width: 100%; justify-content: center; }
+  .btn-accion { padding: 9px 14px; font-size: 0.8rem; }
+  .reproductor-musica-cabecera { flex-wrap: wrap; justify-content: center; }
+  .volumen-musica input[type="range"] { width: 64px; }
+  .teg-fila-jugador { flex-wrap: wrap; gap: 6px; }
+  .panel-lateral { gap: 8px; }
+}

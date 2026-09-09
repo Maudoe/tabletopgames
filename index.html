@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0908">
+  <title>GameHub</title>
+  <link rel="stylesheet" href="css/style.css?v=14">
+  <!-- Leaflet — mapa geográfico real con tiles oscuros (CartoDB), para TEG. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body class="menu-fondo">
+
+  <div class="envoltorio">
+
+    <header class="cabecera">
+      <div class="logo-marca">
+        <span class="logo-tablero"></span>
+        <span class="logo-texto">GAME<span class="hub">HUB</span></span>
+      </div>
+      <p class="lema">Elegí el juego, elegí las reglas, jugá.</p>
+
+      <!-- Reproductor de música: siempre visible (menú y las dos partidas,
+           ver .cabecera en css/style.css), no sólo adentro de un juego —
+           así la música puede sonar desde que uno entra al menú. -->
+      <div class="reproductor-musica reproductor-musica-cabecera">
+        <button class="btn-accion btn-musica-nav btn-musica-anterior" title="Pista anterior">⏮</button>
+        <button class="btn-accion btn-musica-play" title="Reproducir/pausar música">▶ Música</button>
+        <button class="btn-accion btn-musica-nav btn-musica-siguiente" title="Siguiente pista">⏭</button>
+        <span class="volumen-musica">
+          🔊 <input type="range" id="volumen-musica" min="0" max="1" step="0.05" value="0.6">
+        </span>
+      </div>
+    </header>
+
+    <!-- ---------------- vista: selección de juego ---------------- -->
+    <section id="vista-juegos" class="vista">
+      <div class="grilla-juegos">
+
+        <button class="tarjeta-juego" data-juego="go">
+          <span class="fondo"></span>
+          <span class="icono">⚫⚪</span>
+          <span class="velo"></span>
+          <span class="cuerpo">
+            <span class="nombre">Go</span>
+            <span class="desc">바둑 · 围棋 · el clásico juego de territorio</span>
+          </span>
+        </button>
+
+        <button class="tarjeta-juego" data-juego="ajedrez">
+          <span class="fondo"></span>
+          <span class="icono">♟️</span>
+          <span class="velo"></span>
+          <span class="cuerpo">
+            <span class="nombre">Ajedrez</span>
+            <span class="desc">Chess · el juego de estrategia más jugado del mundo</span>
+          </span>
+        </button>
+
+        <button class="tarjeta-juego" data-juego="teg">
+          <span class="fondo"></span>
+          <span class="icono">🌍</span>
+          <span class="velo"></span>
+          <span class="cuerpo">
+            <span class="nombre">TEG</span>
+            <span class="desc">Táctica y Estrategia de la Guerra · conquista el mundo</span>
+          </span>
+        </button>
+
+        <button class="tarjeta-juego" data-juego="damas">
+          <span class="fondo"></span>
+          <span class="icono">⛃</span>
+          <span class="velo"></span>
+          <span class="pronto-badge">Muy pronto</span>
+          <span class="cuerpo">
+            <span class="nombre">Damas</span>
+            <span class="desc">Checkers · captura obligatoria, tablero de 8×8</span>
+          </span>
+        </button>
+
+      </div>
+    </section>
+
+    <!-- ---------------- vista: tablero de Go ---------------- -->
+    <section id="vista-tablero" class="vista vista-tablero oculto">
+      <div class="tablero-cabecera">
+        <div class="tablero-titulo">
+          <button class="btn-volver" id="btn-volver">← Juegos</button>
+          <span class="turno-indicador" id="turno-indicador">
+            <span class="turno-piedra" id="turno-piedra"></span>
+            <span id="turno-texto">Negro juega</span>
+          </span>
+        </div>
+        <div class="acciones-tablero">
+          <button class="btn-accion" id="btn-pasar">Pasar</button>
+          <button class="btn-accion rojo" id="btn-rendirse">Rendirse</button>
+          <button class="btn-accion" id="btn-nueva">Nueva partida</button>
+          <button class="btn-accion" id="btn-pantalla-completa">⛶ Pantalla completa</button>
+        </div>
+      </div>
+
+      <div class="tablero-envoltorio">
+        <div class="tablero-madera" id="tablero-madera"></div>
+      </div>
+
+      <div class="panel-lateral">
+        <div class="info-chip"><div class="num" id="cap-negro">0</div><div class="etq">Capturas negro</div></div>
+        <div class="info-chip"><div class="num" id="cap-blanco">0</div><div class="etq">Capturas blanco</div></div>
+        <div class="info-chip"><div class="num" id="komi-chip">7.5</div><div class="etq">Komi</div></div>
+        <div class="info-chip"><div class="num" id="mov-chip">0</div><div class="etq">Jugadas</div></div>
+      </div>
+
+    </section>
+
+    <!-- ---------------- vista: tablero de Ajedrez ---------------- -->
+    <section id="vista-tablero-ajedrez" class="vista vista-tablero oculto">
+      <div class="tablero-cabecera">
+        <div class="tablero-titulo">
+          <button class="btn-volver" id="btn-volver-ajedrez">← Juegos</button>
+          <span class="turno-indicador" id="turno-indicador-ajedrez">
+            <span class="turno-piedra" id="turno-piedra-ajedrez"></span>
+            <span id="turno-texto-ajedrez">Blancas juegan</span>
+          </span>
+        </div>
+        <div class="acciones-tablero">
+          <button class="btn-accion rojo" id="btn-rendirse-ajedrez">Rendirse</button>
+          <button class="btn-accion" id="btn-nueva-ajedrez">Nueva partida</button>
+          <button class="btn-accion" id="btn-opciones-ajedrez">⚙ Opciones</button>
+          <button class="btn-accion" id="btn-pantalla-completa-ajedrez">⛶ Pantalla completa</button>
+        </div>
+      </div>
+
+      <div class="tablero-envoltorio">
+        <div class="tablero-madera" id="tablero-ajedrez-madera"></div>
+      </div>
+
+      <div class="panel-lateral">
+        <div class="info-chip"><div class="num" id="cap-blancas">0</div><div class="etq">Capturas blancas</div></div>
+        <div class="info-chip"><div class="num" id="cap-negras">0</div><div class="etq">Capturas negras</div></div>
+        <div class="info-chip"><div class="num" id="mov-chip-ajedrez">0</div><div class="etq">Jugadas</div></div>
+        <div class="info-chip"><div class="num" id="disp-blancas">0</div><div class="etq">Jugadas posibles blancas</div></div>
+        <div class="info-chip"><div class="num" id="disp-negras">0</div><div class="etq">Jugadas posibles negras</div></div>
+      </div>
+
+    </section>
+
+    <!-- ---------------- vista: mapa de TEG ---------------- -->
+    <section id="vista-tablero-teg" class="vista vista-tablero oculto">
+      <div class="tablero-cabecera">
+        <div class="tablero-titulo">
+          <button class="btn-volver" id="btn-volver-teg">← Juegos</button>
+          <span class="turno-indicador" id="turno-indicador-teg">
+            <span class="turno-piedra" id="turno-piedra-teg"></span>
+            <span id="turno-texto-teg">Turno de Azul · Refuerzo</span>
+          </span>
+        </div>
+        <div class="acciones-tablero">
+          <button class="btn-accion" id="btn-canjear-teg" disabled>Canjear cartas</button>
+          <button class="btn-accion" id="btn-pasar-fase-teg">Pasar fase</button>
+          <button class="btn-accion rojo" id="btn-rendirse-teg">Rendirse</button>
+          <button class="btn-accion" id="btn-nueva-teg">Nueva partida</button>
+          <button class="btn-accion" id="btn-pantalla-completa-teg">⛶ Pantalla completa</button>
+        </div>
+      </div>
+
+      <p class="teg-ayuda" id="teg-ayuda">Elegí un territorio propio para colocar refuerzos.</p>
+
+      <div class="mapa-envoltorio">
+        <div class="mapa-teg" id="mapa-teg"></div>
+      </div>
+
+      <div class="panel-lateral">
+        <div class="info-chip"><div class="num" id="teg-refuerzos">0</div><div class="etq">Refuerzos por colocar</div></div>
+        <div class="info-chip"><div class="num" id="teg-territorios">0</div><div class="etq">Territorios propios</div></div>
+        <div class="info-chip"><div class="num" id="teg-cartas-num">0</div><div class="etq">Cartas en mano</div></div>
+      </div>
+
+      <div class="teg-panel-detalle">
+        <div class="campo">
+          <div class="campo-label">Tu objetivo secreto</div>
+          <p class="campo-nota" id="teg-objetivo-texto">—</p>
+        </div>
+        <div class="campo">
+          <div class="campo-label">Tus cartas (elegí 3 para canjear)</div>
+          <div class="fila-swatches" id="teg-cartas"></div>
+        </div>
+        <div class="campo">
+          <div class="campo-label">Último combate</div>
+          <p class="campo-nota" id="teg-log-texto">Sin combates todavía.</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ---------------- modal: resultado de la partida ---------------- -->
+  <div class="modal-fondo" id="modal-resultado">
+    <div class="modal modal-resultado">
+      <button class="modal-cerrar" id="modal-resultado-cerrar">✕</button>
+      <div class="resultado-piedra" id="resultado-piedra"></div>
+      <div class="resultado-titulo" id="mensaje-final-titulo">Gana Negro</div>
+      <div class="resultado-detalle" id="mensaje-final-detalle"></div>
+      <div class="resultado-botones">
+        <button class="btn-accion" id="resultado-volver">← Juegos</button>
+        <button class="btn-jugar" id="resultado-nueva" style="margin-top:0;">Nueva partida</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------- modal: configurar partida de Go ---------------- -->
+  <div class="modal-fondo" id="modal-go">
+    <div class="modal">
+      <button class="modal-cerrar" id="modal-go-cerrar">✕</button>
+
+      <div class="tabs" id="tabs-variante">
+        <button class="activo" data-variante="go">Go</button>
+        <button data-variante="atari">Atari Go</button>
+        <button data-variante="survival">Survival Go</button>
+      </div>
+      <p class="modal-sub" id="variante-desc">El juego clásico — rodeá territorio para ganar.</p>
+
+      <div class="aviso-pronto oculto" id="variante-pronto">
+        Esta variante todavía no está lista. Por ahora podés jugar al Go clásico.
+      </div>
+
+      <div id="form-go">
+        <div class="campo-fila" style="margin-top:14px;">
+          <div class="segmentado" id="seg-rival">
+            <button class="activo" data-rival="bot">vs Bot</button>
+            <button data-rival="libre">Free play</button>
+          </div>
+        </div>
+
+        <div id="bloque-nivel">
+          <div class="nivel-linea">✓ <span id="nivel-texto">Nivel 1 · ~30 kyu</span> <span class="nivel-badge">🧠 piensa en serio</span></div>
+          <div class="slider-envoltorio">
+            <input type="range" id="slider-nivel" min="1" max="9" value="1" step="1">
+            <div class="slider-etiquetas"><span>30 kyu</span><span>más fuerte, tarda un poco más</span><span>MAX</span></div>
+          </div>
+        </div>
+
+        <hr class="separador">
+
+        <div class="campo-fila">
+          <div class="campo-label">Tu color</div>
+          <div class="segmentado" id="seg-color">
+            <button data-color="nigiri">Nigiri</button>
+            <button class="activo" data-color="negro"><span class="punto-color negro"></span> Negro</button>
+            <button data-color="blanco"><span class="punto-color blanco"></span> Blanco</button>
+          </div>
+        </div>
+
+        <div class="campo-fila">
+          <div class="campo-label">Tamaño</div>
+          <div class="segmentado" id="seg-tamano">
+            <button data-tamano="9">9×9</button>
+            <button class="activo" data-tamano="13">13×13</button>
+            <button data-tamano="19">19×19</button>
+          </div>
+        </div>
+
+        <div class="campo-fila">
+          <div>
+            <div class="campo-label">Handicap</div>
+            <div class="campo-nota">Komi <span id="komi-texto">7.5</span></div>
+          </div>
+          <div class="stepper">
+            <button id="handicap-menos">−</button>
+            <span class="valor" id="handicap-valor">0</span>
+            <button id="handicap-mas">+</button>
+          </div>
+        </div>
+
+        <hr class="separador">
+
+        <canvas id="preview-tablero" class="preview-tablero" width="320" height="150"></canvas>
+
+        <div class="campo" style="margin-top:16px;">
+          <div class="campo-label">Piedras — Negro</div>
+          <div class="fila-swatches" id="swatches-negro"></div>
+        </div>
+        <div class="campo">
+          <div class="campo-label">Piedras — Blanco</div>
+          <div class="fila-swatches" id="swatches-blanco"></div>
+        </div>
+
+        <div class="campo">
+          <div class="campo-label">Tablero</div>
+          <div class="fila-swatches fila-swatches-tablero" id="swatches-tablero"></div>
+        </div>
+
+        <div class="campo">
+          <div class="campo-label">Luz bajo el tablero</div>
+          <div class="fila-swatches" id="swatches-luz"></div>
+        </div>
+
+        <div class="campo-fila">
+          <div>
+            <div class="campo-label">El bot nunca se rinde</div>
+            <div class="campo-nota">Toda partida termina en conteo</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="toggle-noresign"><span class="via"></span></label>
+        </div>
+
+        <div class="campo-fila">
+          <div>
+            <div class="campo-label">Go a un solo color</div>
+            <div class="campo-nota">Ejercicio de memoria — todas las piedras se ven igual</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="toggle-unicolor"><span class="via"></span></label>
+        </div>
+
+        <button class="btn-jugar" id="btn-jugar">Jugar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------- modal: configurar partida de Ajedrez ---------------- -->
+  <div class="modal-fondo" id="modal-ajedrez">
+    <div class="modal">
+      <button class="modal-cerrar" id="modal-ajedrez-cerrar">✕</button>
+
+      <h2 class="modal-titulo serif" style="margin-top:6px;">Ajedrez</h2>
+      <p class="modal-sub">El clásico juego de estrategia — jaque mate para ganar.</p>
+
+      <div id="form-ajedrez">
+        <div class="campo-fila" style="margin-top:14px;">
+          <div class="segmentado" id="seg-rival-ajedrez">
+            <button class="activo" data-rival="bot">vs Bot</button>
+            <button data-rival="libre">Free play</button>
+          </div>
+        </div>
+
+        <div id="bloque-nivel-ajedrez">
+          <div class="nivel-linea">✓ <span id="nivel-texto-ajedrez">Nivel 1 · ~30 kyu</span> <span class="nivel-badge">🧠 piensa en serio</span></div>
+          <div class="slider-envoltorio">
+            <input type="range" id="slider-nivel-ajedrez" min="1" max="9" value="1" step="1">
+            <div class="slider-etiquetas"><span>30 kyu</span><span>más fuerte, tarda un poco más</span><span>MAX</span></div>
+          </div>
+        </div>
+
+        <hr class="separador">
+
+        <div class="campo-fila">
+          <div class="campo-label">Tu color</div>
+          <div class="segmentado" id="seg-color-ajedrez">
+            <button data-color="nigiri">Sorteo</button>
+            <button class="activo" data-color="blanco"><span class="punto-color blanco"></span> Blancas</button>
+            <button data-color="negro"><span class="punto-color negro"></span> Negras</button>
+          </div>
+        </div>
+
+        <hr class="separador">
+
+        <canvas id="preview-tablero-ajedrez" class="preview-tablero" width="320" height="150"></canvas>
+
+        <div class="campo" style="margin-top:16px;">
+          <div class="campo-label">Piezas — Blancas</div>
+          <div class="fila-swatches" id="swatches-blancas-ajedrez"></div>
+        </div>
+        <div class="campo">
+          <div class="campo-label">Piezas — Negras</div>
+          <div class="fila-swatches" id="swatches-negras-ajedrez"></div>
+        </div>
+
+        <div class="campo">
+          <div class="campo-label">Tablero</div>
+          <div class="fila-swatches fila-swatches-tablero" id="swatches-tablero-ajedrez"></div>
+        </div>
+
+        <div class="campo">
+          <div class="campo-label">Luz bajo el tablero</div>
+          <div class="fila-swatches" id="swatches-luz-ajedrez"></div>
+        </div>
+
+        <div class="campo-fila">
+          <div>
+            <div class="campo-label">El bot nunca se rinde</div>
+            <div class="campo-nota">Toda partida termina en jaque mate, ahogado o tablas</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="toggle-noresign-ajedrez"><span class="via"></span></label>
+        </div>
+
+        <button class="btn-jugar" id="btn-jugar-ajedrez">Jugar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------- modal: opciones del tablero de ajedrez ---------------- -->
+  <div class="modal-fondo" id="modal-opciones-ajedrez">
+    <div class="modal" style="max-width:420px;">
+      <button class="modal-cerrar" id="modal-opciones-cerrar">✕</button>
+      <h2 class="modal-titulo serif" style="margin-top:6px;">Opciones</h2>
+
+      <div class="campo-fila" style="margin-top:14px;">
+        <div class="campo-label">Vista</div>
+        <div class="segmentado" id="seg-vista-ajedrez">
+          <button class="activo" data-vista="3d">Vista 3D</button>
+          <button data-vista="2d">Vista 2D</button>
+        </div>
+      </div>
+
+      <hr class="separador">
+
+      <div class="campo-fila">
+        <div>
+          <div class="campo-label">Efectos de sonido</div>
+          <div class="campo-nota">Al mover o comer una pieza</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="toggle-sfx-ajedrez" checked><span class="via"></span></label>
+      </div>
+      <p class="campo-nota" style="margin-top:14px;">La música se controla desde arriba de todo, en la cabecera de GameHub (⏮ ▶ ⏭ y el volumen) — suena igual en el menú y en las dos partidas.</p>
+    </div>
+  </div>
+  <audio id="musica-ajedrez"></audio>
+
+  <!-- ---------------- modal: configurar partida de TEG ---------------- -->
+  <div class="modal-fondo" id="modal-teg">
+    <div class="modal">
+      <button class="modal-cerrar" id="modal-teg-cerrar">✕</button>
+      <h2 class="modal-titulo serif" style="margin-top:6px;">TEG</h2>
+      <p class="modal-sub">Táctica y Estrategia de la Guerra — conquistá continentes o cumplí tu objetivo secreto.</p>
+
+      <div class="campo-fila" style="margin-top:14px;">
+        <div>
+          <div class="campo-label">Cantidad de jugadores</div>
+          <div class="campo-nota">Vos sos siempre el Jugador 1</div>
+        </div>
+        <div class="stepper">
+          <button id="teg-jugadores-menos">−</button>
+          <span class="valor" id="teg-jugadores-valor">3</span>
+          <button id="teg-jugadores-mas">+</button>
+        </div>
+      </div>
+
+      <div id="teg-lista-jugadores"></div>
+
+      <hr class="separador">
+
+      <div id="bloque-nivel-teg">
+        <div class="nivel-linea">✓ <span id="nivel-texto-teg">Nivel 5 · ~10 kyu</span> <span class="nivel-badge">⚡ instantáneo</span></div>
+        <div class="slider-envoltorio">
+          <input type="range" id="slider-nivel-teg" min="1" max="9" value="5" step="1">
+          <div class="slider-etiquetas"><span>bots fáciles</span><span>dificultad de los bots</span><span>bots difíciles</span></div>
+        </div>
+      </div>
+
+      <button class="btn-jugar" id="btn-jugar-teg">Jugar</button>
+    </div>
+  </div>
+
+  <!-- ---------------- modal: juego todavía no disponible ---------------- -->
+  <div class="modal-fondo" id="modal-pronto">
+    <div class="modal" style="text-align:center;">
+      <button class="modal-cerrar" id="modal-pronto-cerrar">✕</button>
+      <div class="modal-icono" id="pronto-icono" style="margin-top:6px;">♟️</div>
+      <h2 class="modal-titulo serif" id="pronto-titulo" style="margin-top:14px;">Ajedrez</h2>
+      <p class="modal-sub" id="pronto-desc">Todavía se está armando el tablero y las reglas. Mientras tanto, jugá una partida de Go.</p>
+      <button class="btn-jugar" id="pronto-ok">Entendido</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="js/motorbot.js?v=2"></script>
+  <script src="js/go.js?v=8"></script>
+  <script src="js/gobot.js?v=4"></script>
+  <script src="js/chess.js?v=3"></script>
+  <script src="js/teg.js?v=1"></script>
+  <script src="js/board3d.js?v=18"></script>
+  <script src="js/chess3d.js?v=14"></script>
+  <script src="js/tegmapa.js?v=3"></script>
+  <script src="js/app.js?v=20"></script>
+</body>
+</html>

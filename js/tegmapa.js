@@ -294,25 +294,67 @@ class TegMapa {
     const cv = document.createElement("canvas");
     cv.width = W; cv.height = H;
     const ctx = cv.getContext("2d");
-    const base = ctx.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.5, W * 0.65);
-    base.addColorStop(0, "#1c6b8a"); base.addColorStop(0.55, "#0e3a56"); base.addColorStop(1, "#051726");
+    // La primera versión era un solo gradiente claro con vetas parejas y
+    // quedaba "celeste lavado". En la mesa de referencia el agua es azul
+    // PROFUNDO casi negro, y lo brillante son vetas angostas localizadas —
+    // así que acá va por capas, de atrás hacia adelante:
+
+    // capa 1 — base profunda, casi negra hacia los bordes.
+    const base = ctx.createLinearGradient(0, 0, W * 0.4, H);
+    base.addColorStop(0, "#071a30"); base.addColorStop(0.5, "#0a2036"); base.addColorStop(1, "#030b16");
     ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
 
-    // "vetas" de luz, curvas suaves más claras — mismo mecanismo que la
-    // madera pero en tonos cian, para que el agua lea como un río de
-    // cristal iluminado, no un charco plano.
+    // capa 2 — manchas anchas de azul medio, desenfocadas: profundidades
+    // desparejas, como resina vertida en tandas.
+    ctx.filter = `blur(${W * 0.03}px)`;
+    for (let i = 0; i < 8; i++) {
+      ctx.fillStyle = i % 2 ? "#0e3a5c" : "#123152";
+      ctx.globalAlpha = 0.4;
+      const cx = Math.random() * W, cy = Math.random() * H;
+      const r = W * (0.06 + Math.random() * 0.1);
+      ctx.beginPath(); ctx.ellipse(cx, cy, r, r * (0.4 + Math.random() * 0.5), Math.random() * Math.PI, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // capa 3 — vetas turquesa angostas (los "ríos de luz" de la mesa):
+    // pocas, finas y serpenteantes, no un lavado parejo.
+    ctx.filter = `blur(${W * 0.004}px)`;
     ctx.globalAlpha = 0.5;
-    ctx.filter = `blur(${W * 0.01}px)`;
-    for (let i = 0; i < 5; i++) {
-      ctx.strokeStyle = "#5fd4e8";
-      ctx.lineWidth = W * (0.01 + Math.random() * 0.012);
+    const vetas = [];
+    for (let i = 0; i < 6; i++) {
+      const y0 = H * (0.1 + Math.random() * 0.8);
+      const c1 = (Math.random() - 0.5) * H * 0.45, c2 = (Math.random() - 0.5) * H * 0.45, fin = (Math.random() - 0.5) * H * 0.3;
+      vetas.push([y0, c1, c2, fin]);
+      ctx.strokeStyle = "#1f7fa8";
+      ctx.lineWidth = W * (0.003 + Math.random() * 0.005);
       ctx.beginPath();
-      const y0 = H * (0.15 + Math.random() * 0.7);
       ctx.moveTo(-20, y0);
-      ctx.bezierCurveTo(W * 0.33, y0 + (Math.random() - 0.5) * H * 0.3, W * 0.66, y0 + (Math.random() - 0.5) * H * 0.3, W + 20, y0 + (Math.random() - 0.5) * H * 0.2);
+      ctx.bezierCurveTo(W * 0.33, y0 + c1, W * 0.66, y0 + c2, W + 20, y0 + fin);
       ctx.stroke();
     }
-    ctx.filter = "none"; ctx.globalAlpha = 1;
+
+    // capa 4 — núcleo caliente casi blanco ADENTRO de algunas de esas
+    // mismas vetas (no vetas nuevas): el "filamento" encendido.
+    ctx.globalAlpha = 0.55;
+    for (let i = 0; i < 3; i++) {
+      const [y0, c1, c2, fin] = vetas[i * 2];
+      ctx.strokeStyle = "#9fe6f4";
+      ctx.lineWidth = W * 0.0016;
+      ctx.beginPath();
+      ctx.moveTo(-20, y0);
+      ctx.bezierCurveTo(W * 0.33, y0 + c1, W * 0.66, y0 + c2, W + 20, y0 + fin);
+      ctx.stroke();
+    }
+    ctx.filter = "none";
+
+    // capa 5 — partículas en suspensión, apenas visibles.
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = "#7fd4e8";
+    for (let i = 0; i < 130; i++) {
+      ctx.beginPath();
+      ctx.arc(Math.random() * W, Math.random() * H, 0.5 + Math.random() * 1.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
 
     ctx.strokeStyle = "rgba(201,169,97,0.08)";
     ctx.lineWidth = 1.2;
@@ -368,7 +410,10 @@ class TegMapa {
     // pulsa, ver _texturaAgua/_loop) — los países van en un plano
     // transparente aparte, apoyado encima (ver más abajo), no acá.
     const texAgua = this._texturaAgua();
-    this._intensidadAguaBase = 0.55;
+    // base baja: como el emissiveMap es la misma textura (mayormente
+    // oscura), sólo las vetas claras brillan de verdad — las zonas
+    // profundas se quedan oscuras, como en la mesa de referencia.
+    this._intensidadAguaBase = 0.32;
     const matLateral = new THREE.MeshStandardMaterial({ map: this._texturaLateralOscura(), roughness: 0.75, metalness: 0.06 });
     const matAgua = new THREE.MeshPhysicalMaterial({
       map: texAgua, emissiveMap: texAgua, emissive: new THREE.Color(0x3fc6e0),
@@ -745,7 +790,7 @@ class TegMapa {
     if (t - this._ultimoFrameLineas > 60) { this._ultimoFrameLineas = t; this._actualizarLineas(); }
     // el agua "se prende y apaga" con un pulso lento y suave — mucho más
     // lento que el parpadeo tipo neón de la luz del pedestal de abajo.
-    if (this._matAgua) this._matAgua.emissiveIntensity = this._intensidadAguaBase + Math.sin(this._tiempo * 0.6) * 0.28;
+    if (this._matAgua) this._matAgua.emissiveIntensity = this._intensidadAguaBase + Math.sin(this._tiempo * 0.6) * 0.14;
     const r = this._distancia;
     const cx = r * Math.sin(this._elevacion) * Math.sin(this._azimut);
     const cz = r * Math.sin(this._elevacion) * Math.cos(this._azimut);

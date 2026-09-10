@@ -5,11 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0a0908">
   <title>GameHub</title>
-  <link rel="stylesheet" href="css/style.css?v=20">
+  <link rel="stylesheet" href="css/style.css?v=26">
 </head>
 <body class="menu-fondo">
 
   <div class="envoltorio">
+
+    <!-- Marca grande fija en el margen izquierdo: sólo aparece adentro de
+         una partida y con pantalla ancha de sobra (ver css/style.css),
+         usando el espacio vacío que deja el ancho fijo de .envoltorio en
+         vez de dejarlo desperdiciado. -->
+    <img class="logo-marca-grande" src="assets/logo_gamehub.png" alt="GameHub">
 
     <header class="cabecera">
       <div class="logo-marca">
@@ -20,15 +26,20 @@
            ver .cabecera en css/style.css), no sólo adentro de un juego —
            así la música puede sonar desde que uno entra al menú. -->
       <div class="reproductor-musica reproductor-musica-cabecera">
-        <button class="btn-musica-nav btn-musica-anterior" title="Pista anterior">⏮</button>
-        <button class="btn-musica-play" title="Reproducir/pausar música">▶</button>
-        <button class="btn-musica-nav btn-musica-siguiente" title="Siguiente pista">⏭</button>
+        <button class="btn-musica-nav btn-musica-anterior" title="Pista anterior"><span class="icono-atras"></span></button>
+        <button class="btn-musica-play" title="Reproducir/pausar música">
+          <span class="icono-play"></span>
+          <span class="icono-pausa"></span>
+        </button>
+        <button class="btn-musica-nav btn-musica-siguiente" title="Siguiente pista"><span class="icono-adelante"></span></button>
         <div class="musica-info">
           <span class="musica-etiqueta">Música</span>
           <span class="musica-titulo" id="musica-titulo">En pausa</span>
         </div>
+        <span class="musica-ecualizador" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="volumen-musica">
-          🔊 <input type="range" id="volumen-musica" min="0" max="1" step="0.05" value="0.6">
+          <span class="icono-volumen"></span>
+          <input type="range" id="volumen-musica" min="0" max="1" step="0.05" value="0.6">
         </span>
       </div>
     </header>
@@ -414,7 +425,7 @@
         </div>
         <label class="toggle"><input type="checkbox" id="toggle-sfx-ajedrez" checked><span class="via"></span></label>
       </div>
-      <p class="campo-nota" style="margin-top:14px;">La música se controla desde arriba de todo, en la cabecera de GameHub (⏮ ▶ ⏭ y el volumen) — suena igual en el menú y en las dos partidas.</p>
+      <p class="campo-nota" style="margin-top:14px;">La música se controla desde arriba de todo, en la cabecera de GameHub (anterior/play/siguiente y el volumen) — suena igual en el menú y en las tres partidas.</p>
     </div>
   </div>
   <audio id="musica-ajedrez"></audio>
@@ -475,6 +486,6 @@
   <script src="js/board3d.js?v=18"></script>
   <script src="js/chess3d.js?v=14"></script>
   <script src="js/tegmapa.js?v=21"></script>
-  <script src="js/app.js?v=24"></script>
+  <script src="js/app.js?v=25"></script>
 </body>
 </html>

@@ -110,54 +110,103 @@ h1, h2, h3, .serif { font-family: Georgia, "Times New Roman", serif; font-weight
 .pantalla-completa .envoltorio { max-width: none; padding: 0 clamp(12px, 3vw, 40px) 24px; }
 
 /* ---------------- encabezado ---------------- */
-.cabecera { padding: 46px 0 30px; text-align: center; position: relative; }
+.cabecera {
+  padding: 46px 0 30px; text-align: center; position: relative;
+  transition: padding var(--transicion);
+}
 .logo-marca {
   display: inline-flex; align-items: center; justify-content: center;
 }
 /* Logo real (assets/logo_gamehub.png, provisto por el usuario) en vez del
    ícono+texto armado con CSS que había antes — y de la frase debajo, que
-   se sacó del todo (el logo solo ya funciona como marca). */
-.logo-imagen { height: 736px; width: auto; display: block; filter: drop-shadow(0 6px 16px rgba(0,0,0,0.55)); }
+   se sacó del todo (el logo solo ya funciona como marca). Grande y
+   centrado en el menú; al entrar a una partida se achica y se va a la
+   izquierda solo (ver más abajo, `body:not(.menu-fondo)`), animado con la
+   misma transición — "aparece grande y después se hace chico", no un
+   salto — para no robarle todo el alto de pantalla al tablero mientras
+   se juega. */
+.logo-imagen {
+  height: clamp(150px, 20vw, 260px); width: auto; display: block;
+  filter: drop-shadow(0 6px 16px rgba(0,0,0,0.55));
+  transition: height 640ms cubic-bezier(0.16, 1, 0.3, 1);
+}
 
-/* Pantalla completa: la cabecera se achica al mínimo (logo más chico) para
-   que casi toda la pantalla quede para el tablero/mapa — pero sin
-   desaparecer del todo, porque ahí siguen los controles de música, que
-   tienen que seguir alcanzables. */
-.pantalla-completa .cabecera { padding: 14px 0 10px; }
-.pantalla-completa .logo-imagen { height: 46px; }
-.pantalla-completa .reproductor-musica-cabecera { margin-top: 8px; padding: 4px 14px 4px 4px; }
-.pantalla-completa .btn-musica-nav { width: 26px; height: 26px; font-size: 0.8rem; }
-.pantalla-completa .btn-musica-play { width: 34px; height: 34px; font-size: 0.85rem; }
+/* Adentro de una partida (menú ya no visible, ver body.menu-fondo que se
+   saca al abrir cualquier juego): cabecera chica en vez del logo gigante,
+   pero sigue centrada — el logo pasa a ser una marca chica pero sigue
+   siendo el centro de la cabecera, no se va a pegar a ningún borde. El
+   reproductor ya no vive acá (ver más abajo, es una marca fija en la
+   esquina inferior izquierda de toda la pantalla). */
+body:not(.menu-fondo) .cabecera { padding: 16px 0 12px; }
+body:not(.menu-fondo) .logo-imagen { height: 84px; }
+
+/* Marca grande en el margen izquierdo: .envoltorio tiene un ancho fijo
+   (max-width: 1180px, centrado), así que en una pantalla bien ancha
+   queda un margen vacío de sobra a los costados — ahí entra un logo
+   grande, fijo, sin robarle nada al tablero. Sólo tiene sentido si ese
+   margen existe: pantalla ancha y no pantalla completa (ahí el tablero
+   usa el ancho entero, ver .pantalla-completa .envoltorio). En cualquier
+   otro caso se queda oculta y manda el logo chico de la cabecera de
+   siempre. */
+.logo-marca-grande { display: none; }
+@media (min-width: 1500px) {
+  html:not(.pantalla-completa) body:not(.menu-fondo) .logo-marca-grande {
+    display: block;
+    position: fixed; left: 30px; top: 18px; z-index: 30;
+    height: clamp(220px, 18vw, 320px); width: auto;
+    filter: drop-shadow(0 10px 26px rgba(0,0,0,0.6));
+    pointer-events: none;
+  }
+  html:not(.pantalla-completa) body:not(.menu-fondo) .cabecera .logo-marca {
+    visibility: hidden;
+  }
+}
+
+/* Pantalla completa: un paso más chico todavía (casi toda la pantalla
+   para el tablero/mapa), pero sin desaparecer del todo. */
+.pantalla-completa .cabecera { padding: 10px 0 8px; }
+.pantalla-completa .logo-imagen { height: 52px; }
+.pantalla-completa .btn-musica-nav { width: 26px; height: 26px; }
+.pantalla-completa .btn-musica-play { width: 34px; height: 34px; }
 .pantalla-completa .musica-info { display: none; }
 
-/* reproductor en la cabecera principal: centrado como el resto (el padre
-   es text-align:center), visible en el menú y en las dos partidas porque
-   la cabecera nunca se oculta. Antes era sólo botones sueltos con el
-   estilo genérico de .btn-accion — una cápsula de vidrio con dorado,
-   a tono con el resto del sitio (modales, cartas de juego), con el botón
-   de play como pieza central destacada en vez de un botón más del montón. */
+/* reproductor: marca fija en la esquina inferior izquierda de toda la
+   pantalla (no vive en el flujo de la cabecera), visible siempre — menú
+   y las tres partidas — sin competir con el logo, que ahora queda libre
+   para estar centrado. Iconos dibujados en CSS (nada de emoji ⏮▶⏸⏭, se
+   veían "baratos" e inconsistentes entre sistemas) + un mini ecualizador
+   animado cuando suena — mismo filete dorado arriba que usan los modales
+   (.modal::before), para que la cápsula se sienta parte de la misma
+   familia visual, no un widget aparte. */
 .reproductor-musica-cabecera {
-  display: inline-flex; align-items: center; gap: 4px;
-  margin-top: 22px;
-  background: linear-gradient(170deg, #1c1811 0%, var(--carta) 60%, #100e0b 100%);
+  position: fixed; left: 16px; bottom: 16px; z-index: 60;
+  display: inline-flex; align-items: center; gap: 2px;
+  background: linear-gradient(170deg, #1f1a12 0%, var(--carta) 55%, #100e0b 100%);
   border: 1px solid rgba(var(--oro-rgb), 0.4);
   border-radius: 40px;
-  padding: 6px 18px 6px 6px;
-  box-shadow: 0 0 0 1px rgba(6,5,5,0.75), 0 10px 26px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
+  padding: 7px 20px 7px 7px;
+  box-shadow: 0 0 0 1px rgba(6,5,5,0.75), 0 12px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+  overflow: hidden;
+}
+.reproductor-musica-cabecera::before {
+  content: ""; position: absolute; top: 0; left: 14%; right: 14%; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,246,224,0.7), transparent);
+}
+
+.btn-musica-nav, .btn-musica-play {
+  border: 1px solid transparent; cursor: pointer;
+  display: grid; place-items: center; flex-shrink: 0;
+  transition: all var(--transicion);
 }
 .btn-musica-nav {
-  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
-  background: none; border: 1px solid transparent; color: var(--tenue);
-  font-size: 0.92rem; cursor: pointer; display: grid; place-items: center;
-  transition: all var(--transicion);
+  width: 30px; height: 30px; border-radius: 50%;
+  background: none; color: var(--tenue);
 }
 .btn-musica-nav:hover { color: var(--oro-claro); background: rgba(var(--oro-rgb), 0.1); border-color: rgba(var(--oro-rgb), 0.3); }
 
 .btn-musica-play {
-  width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
-  background: var(--negro-2); border: 1px solid var(--borde); color: var(--blanco);
-  font-size: 1rem; cursor: pointer; display: grid; place-items: center;
-  transition: all var(--transicion);
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--negro-2); border-color: var(--borde); color: var(--blanco);
 }
 .btn-musica-play:hover { border-color: var(--oro); color: var(--oro-claro); }
 /* sonando: se destaca como el centro de la cápsula, con un pulso suave —
@@ -172,9 +221,46 @@ h1, h2, h3, .serif { font-family: Georgia, "Times New Roman", serif; font-weight
   50% { box-shadow: 0 0 0 6px rgba(var(--oro-rgb), 0.08), 0 4px 16px rgba(var(--oro-rgb), 0.45); }
 }
 
+/* iconos: triángulos/barras dibujados con border-trick y pseudo-elementos,
+   nada de glifos de fuente — se ven nítidos a cualquier tamaño y son
+   siempre `currentColor`, así heredan el dorado/negro del botón solos. */
+.icono-play, .icono-pausa, .icono-atras, .icono-adelante, .icono-volumen { display: inline-block; }
+.icono-play {
+  width: 0; height: 0; margin-left: 2px;
+  border-style: solid; border-width: 6px 0 6px 10px;
+  border-color: transparent transparent transparent currentColor;
+}
+.icono-pausa { position: relative; width: 10px; height: 12px; }
+.icono-pausa::before, .icono-pausa::after { content: ""; position: absolute; top: 0; width: 3px; height: 12px; background: currentColor; border-radius: 1px; }
+.icono-pausa::before { left: 0; } .icono-pausa::after { right: 0; }
+.btn-musica-play .icono-pausa { display: none; }
+.btn-musica-play.activo-musica .icono-play { display: none; }
+.btn-musica-play.activo-musica .icono-pausa { display: block; }
+
+.icono-adelante, .icono-atras { position: relative; width: 11px; height: 12px; }
+.icono-adelante::before {
+  content: ""; position: absolute; left: 0; top: 0; width: 0; height: 0;
+  border-style: solid; border-width: 6px 0 6px 8px; border-color: transparent transparent transparent currentColor;
+}
+.icono-adelante::after { content: ""; position: absolute; right: 0; top: 0; width: 2px; height: 12px; background: currentColor; border-radius: 1px; }
+.icono-atras::before {
+  content: ""; position: absolute; right: 0; top: 0; width: 0; height: 0;
+  border-style: solid; border-width: 6px 8px 6px 0; border-color: transparent currentColor transparent transparent;
+}
+.icono-atras::after { content: ""; position: absolute; left: 0; top: 0; width: 2px; height: 12px; background: currentColor; border-radius: 1px; }
+
+.icono-volumen { position: relative; width: 13px; height: 12px; color: var(--tenue); }
+.icono-volumen::before {
+  content: ""; position: absolute; left: 0; top: 3px; width: 4px; height: 6px; background: currentColor;
+}
+.icono-volumen::after {
+  content: ""; position: absolute; left: 3px; top: 0; width: 0; height: 12px;
+  border-style: solid; border-width: 6px 0 6px 5px; border-color: transparent transparent transparent currentColor;
+}
+
 .musica-info {
   display: flex; flex-direction: column; justify-content: center;
-  min-width: 0; max-width: 150px; margin: 0 4px 0 8px;
+  min-width: 0; max-width: 150px; margin: 0 6px 0 10px;
   text-align: left;
 }
 .musica-etiqueta { font-size: 0.62rem; letter-spacing: 0.5px; text-transform: uppercase; color: var(--tenue); opacity: 0.75; }
@@ -183,10 +269,26 @@ h1, h2, h3, .serif { font-family: Georgia, "Times New Roman", serif; font-weight
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* mini ecualizador: sólo aparece con música sonando (selector de hermano
+   general desde .activo-musica), tres barritas que suben y bajan
+   desfasadas — el detalle "vivo" que le faltaba al reproductor. */
+.musica-ecualizador {
+  display: none; align-items: flex-end; gap: 2px; height: 13px; margin-right: 6px;
+}
+.btn-musica-play.activo-musica ~ .musica-ecualizador { display: flex; }
+.musica-ecualizador i {
+  display: block; width: 3px; border-radius: 2px; transform-origin: bottom;
+  background: linear-gradient(180deg, var(--oro-claro), var(--oro));
+  animation: musica-eq 0.9s ease-in-out infinite;
+}
+.musica-ecualizador i:nth-child(1) { height: 6px; animation-delay: -0.6s; }
+.musica-ecualizador i:nth-child(2) { height: 13px; animation-delay: -0.3s; }
+.musica-ecualizador i:nth-child(3) { height: 9px; animation-delay: 0s; }
+@keyframes musica-eq { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+
 .volumen-musica {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding-left: 12px; margin-left: 4px; border-left: 1px solid var(--borde);
-  font-size: 0.86rem; color: var(--tenue);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding-left: 12px; margin-left: 2px; border-left: 1px solid var(--borde);
 }
 .volumen-musica input[type="range"] {
   width: 84px; accent-color: var(--oro);
@@ -676,17 +778,21 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
 @media (max-width: 620px) {
   .modal { width: 100%; padding: 22px 16px 20px; }
   .grilla-juegos { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
-  .cabecera { padding: 30px 0 20px; }
-  .logo-imagen { height: 180px; }
+  .cabecera { padding: 24px 0 16px; }
+  .logo-imagen { height: 130px; }
   .envoltorio { padding: 0 14px 70px; }
+  body:not(.menu-fondo) .logo-imagen { height: 64px; }
+  .pantalla-completa .logo-imagen { height: 44px; }
   .tablero-envoltorio, .mapa-envoltorio { height: min(48vh, 480px); }
   .pantalla-completa .vista-tablero { padding: 14px 12px 26px; }
   .pantalla-completa .tablero-cabecera { margin: -14px -12px 14px; padding: 10px 12px; }
   .tablero-titulo { width: 100%; justify-content: center; }
   .acciones-tablero { width: 100%; justify-content: center; }
   .btn-accion { padding: 9px 14px; font-size: 0.8rem; }
-  .reproductor-musica-cabecera { flex-wrap: wrap; justify-content: center; border-radius: var(--radio); row-gap: 8px; }
-  .musica-info { display: none; } /* poco lugar en una fila que ya envuelve — el título no entra prolijo */
+  /* Pantalla angosta: la cápsula fija de música se achica y pierde el
+     título/volumen (no entran prolijos en una marca de esquina chica). */
+  .reproductor-musica-cabecera { left: 10px; bottom: 10px; padding: 5px 10px 5px 5px; gap: 0; }
+  .musica-info, .volumen-musica { display: none; }
   .volumen-musica { border-left: none; padding-left: 0; margin-left: 0; }
   .volumen-musica input[type="range"] { width: 64px; }
   .teg-fila-jugador { flex-wrap: wrap; gap: 6px; }

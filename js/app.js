@@ -986,10 +986,10 @@ function anteriorPistaMusica() { _cargarPistaMusica(indiceMusicaAjedrez - 1); }
 // controles en pantalla, se mantienen sincronizados solos.
 $("#musica-ajedrez").addEventListener("ended", siguientePistaMusica);
 $("#musica-ajedrez").addEventListener("play", () => {
-  $$(".btn-musica-play").forEach((b) => { b.textContent = "⏸"; b.classList.add("activo-musica"); });
+  $$(".btn-musica-play").forEach((b) => b.classList.add("activo-musica"));
 });
 $("#musica-ajedrez").addEventListener("pause", () => {
-  $$(".btn-musica-play").forEach((b) => { b.textContent = "▶"; b.classList.remove("activo-musica"); });
+  $$(".btn-musica-play").forEach((b) => b.classList.remove("activo-musica"));
   const titulo = $("#musica-titulo");
   if (titulo && indiceMusicaAjedrez === -1) titulo.textContent = "En pausa";
 });

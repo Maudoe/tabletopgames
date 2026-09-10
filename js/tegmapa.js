@@ -405,6 +405,9 @@ class TegMapa {
     return geo;
   }
 
+  // Ficha "de lujo": mármol de verdad (vetas finas curvas, no manchas
+  // redondas) sobre un material de vidrio translúcido (transmission, no
+  // sólo brillo) — se nota el color al trasluz en vez de una piedra opaca.
   _materialFicha(hex) {
     this._cacheMateriales = this._cacheMateriales || {};
     if (this._cacheMateriales[hex]) return this._cacheMateriales[hex];
@@ -412,21 +415,32 @@ class TegMapa {
     const cv = document.createElement("canvas");
     cv.width = cv.height = N;
     const ctx = cv.getContext("2d");
-    ctx.fillStyle = hex; ctx.fillRect(0, 0, N, N);
-    ctx.filter = `blur(${N * 0.05}px)`;
-    for (let i = 0; i < 5; i++) {
-      ctx.fillStyle = i % 2 ? _mezclarColorTeg(hex, 0.3) : _mezclarColorTeg(hex, -0.25);
-      ctx.globalAlpha = 0.25;
-      const cx = Math.random() * N, cy = Math.random() * N, r = N * (0.15 + Math.random() * 0.2);
-      ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.7, Math.random() * Math.PI, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = _mezclarColorTeg(hex, 0.08); ctx.fillRect(0, 0, N, N);
+
+    ctx.globalAlpha = 0.5;
+    ctx.filter = `blur(${N * 0.012}px)`;
+    for (let i = 0; i < 7; i++) {
+      ctx.strokeStyle = i % 2 ? _mezclarColorTeg(hex, 0.55) : _mezclarColorTeg(hex, -0.35);
+      ctx.lineWidth = 1 + Math.random() * 1.6;
+      ctx.beginPath();
+      const y0 = Math.random() * N;
+      ctx.moveTo(0, y0);
+      ctx.bezierCurveTo(N * 0.33, y0 + (Math.random() - 0.5) * N * 0.5, N * 0.66, y0 + (Math.random() - 0.5) * N * 0.5, N, y0 + (Math.random() - 0.5) * N * 0.3);
+      ctx.stroke();
     }
     ctx.filter = "none"; ctx.globalAlpha = 1;
-    const brillo = ctx.createRadialGradient(N * 0.32, N * 0.28, 0, N * 0.32, N * 0.28, N * 0.55);
-    brillo.addColorStop(0, "rgba(255,255,255,0.3)"); brillo.addColorStop(1, "rgba(255,255,255,0)");
+
+    const brillo = ctx.createRadialGradient(N * 0.32, N * 0.26, 0, N * 0.32, N * 0.26, N * 0.6);
+    brillo.addColorStop(0, "rgba(255,255,255,0.55)"); brillo.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = brillo; ctx.fillRect(0, 0, N, N);
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const mat = new THREE.MeshPhysicalMaterial({ map: tex, roughness: 0.28, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.14, emissive: 0x000000 });
+    const mat = new THREE.MeshPhysicalMaterial({
+      map: tex, color: hex, roughness: 0.08, metalness: 0,
+      transmission: 0.55, thickness: 0.6, ior: 1.5,
+      clearcoat: 1, clearcoatRoughness: 0.03, reflectivity: 0.6,
+      emissive: 0x000000,
+    });
     this._cacheMateriales[hex] = mat;
     return mat;
   }
@@ -504,6 +518,7 @@ class TegMapa {
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false, fog: false });
     this._planoLineas = new THREE.Mesh(geo, mat);
     this._planoLineas.position.y = 0.004;
+    this._planoLineas.visible = false; // sólo se prenden en ataque/fortificación, ver actualizar()
     this._grupoTablero.add(this._planoLineas);
 
     this._aristasLineas = [];
@@ -524,7 +539,7 @@ class TegMapa {
     ctx.clearRect(0, 0, W, H);
     ctx.lineWidth = 1.4;
     ctx.setLineDash([6, 5]);
-    ctx.lineDashOffset = -this._tiempo * 28;
+    ctx.lineDashOffset = -this._tiempo * 5;
     for (const [a, b] of this._aristasLineas) {
       ctx.strokeStyle = COLOR_CONTINENTE_TEG[TERRITORIOS[a].continente] || "#c9a961";
       ctx.globalAlpha = 0.55;
@@ -557,6 +572,10 @@ class TegMapa {
       f.piedra.material.emissive?.set(this._continenteResaltado && f.continente === this._continenteResaltado ? 0xff7a2c : 0x000000);
       f.piedra.material.emissiveIntensity = 0.55;
     }
+    // Las líneas de conexión sólo se muestran en ataque/fortificación —
+    // ahí es cuando importa ver quién linda con quién; en refuerzo sólo
+    // suman ruido visual sobre 256 fichas.
+    if (this._planoLineas) this._planoLineas.visible = teg.fase === "ataque" || teg.fase === "fortificacion";
   }
 
   // ---- interacción ----
@@ -642,7 +661,7 @@ class TegMapa {
   // siempre animado (lerp), nunca un salto, para que se sienta "flotar" en
   // vez de tildarse arriba/abajo de golpe.
   _actualizarElevacion() {
-    const SUBIDA = 0.16, VELOCIDAD = 0.22;
+    const SUBIDA = 0.13, VELOCIDAD = 0.09;
     for (const id in this._fichas) {
       const f = this._fichas[id];
       const objetivo = id === this._territorioHover ? SUBIDA : 0;

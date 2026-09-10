@@ -19,7 +19,7 @@ class Ajedrez2Tablero3D {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.35;
+    this.renderer.toneMappingExposure = 1.12;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.dom = this.renderer.domElement;
@@ -48,6 +48,7 @@ class Ajedrez2Tablero3D {
 
     this._crearLuces();
     this._crearHabitacion();
+    this._crearAntorchas();
     this.escena.add(this._cuboCamara);
     this._crearTableroBase("rojoNegro");
     this.escena.add(this._grupoPiezas);
@@ -60,15 +61,16 @@ class Ajedrez2Tablero3D {
   }
 
   _crearLuces() {
-    // Pasada de luz mucho más generosa que el resto de la casa a propósito
-    // — pedido explícito y repetido ("sigo sintiendo el tablero muy oscuro,
-    // cuesta distinguir a las fichas"): acá las piezas SON el contenido
-    // (personajes con detalle real, no geometría simple), así que se
-    // prioriza que se vean claramente por sobre el clima de estudio oscuro
-    // que sí tiene sentido en Go/Ajedrez/Damas.
-    const hemi = new THREE.HemisphereLight(0xaab4d6, 0x14100c, 1.1);
+    // Vuelta atrás del "subir todo parejo" (se sentía como demasiada luz
+    // por todos lados, no como una escena bien iluminada) — la idea real
+    // del usuario es más concreta: 4 antorchas en las esquinas del
+    // tablero. Estas luces de acá vuelven a niveles moderados, de fondo
+    // nomás; las antorchas (_crearAntorchas, llamadas desde el
+    // constructor) son las que de verdad iluminan las piezas de cerca,
+    // con luz cálida y direccional en vez de un baño parejo de luz fría.
+    const hemi = new THREE.HemisphereLight(0x8a734a, 0x0a0806, 0.55);
     this.escena.add(hemi);
-    this.key = new THREE.DirectionalLight(0xfff2d8, 3.4);
+    this.key = new THREE.DirectionalLight(0xfff2d8, 1.7);
     this.key.position.set(-4.2, 6.5, 3.4);
     this.key.castShadow = true;
     this.key.shadow.mapSize.set(2048, 2048);
@@ -81,39 +83,69 @@ class Ajedrez2Tablero3D {
     this.key.shadow.bias = -0.0018;
     this.key.shadow.radius = 4;
     this.escena.add(this.key);
-    const fill = new THREE.DirectionalLight(0x9db4d9, 1.2);
+    const fill = new THREE.DirectionalLight(0x9db4d9, 0.5);
     fill.position.set(5, 3, -4);
     this.escena.add(fill);
-    // Relleno frontal suave, de frente a la cámara por defecto: sin esto
-    // las piezas (sobre todo las negras, ya oscuras de por sí) se
-    // comían casi toda la luz en su propia sombra frontal.
-    const frente = new THREE.DirectionalLight(0xd8e4ff, 1.3);
-    frente.position.set(0, 4, 14);
-    this.escena.add(frente);
-    // Relleno cenital, derecho de arriba: los otros focos son todos
-    // laterales/frontales, así que la parte de ARRIBA de cada personaje
-    // (cascos, hombros, alas) se quedaba en sombra propia — este es el que
-    // más se nota cuando "cuesta distinguir a las fichas" desde la cámara
-    // por default, que mira el tablero un poco desde arriba.
-    const cenital = new THREE.DirectionalLight(0xf5f0e6, 1.1);
-    cenital.position.set(0, 9, 0);
-    this.escena.add(cenital);
+  }
 
-    // "Luz de contra" — un par de focos cálidos detrás de cada fila de
-    // piezas (no del tablero: de las piezas), apuntando hacia la cámara,
-    // para separarlas del fondo oscuro con un borde de luz — pedido
-    // explícito: "simular una luz atrás de las fichas negras". Se hace
-    // para las dos filas (no sólo negras) porque blancas está igual de
-    // lejos de la luna en la fila opuesta y se beneficia igual.
-    this.contraNegras = new THREE.SpotLight(0xbfd4ff, 9, 22, Math.PI / 2.8, 0.6, 1.1);
-    this.contraNegras.position.set(0, 2.6, 7.2);
-    this.contraNegras.target.position.set(0, 1, 3.5);
-    this.escena.add(this.contraNegras, this.contraNegras.target);
+  // Cuatro antorchas paradas en las cuatro esquinas del tablero (afuera del
+  // marco, una por esquina) — pedido explícito del usuario en vez del
+  // "subir la luz ambiente en todos lados" que se había probado antes: acá
+  // cada una es una fuente de luz real y cálida, con su propia llama
+  // (sprite aditivo animado) y un PointLight que titila — se nota como
+  // antorcha de verdad, no como más luz de relleno genérica.
+  _crearAntorchas() {
+    this._antorchas = [];
+    const mitad = 4 + 0.34; // borde del marco (ver _crearTableroBase)
+    const esquinas = [
+      [-mitad - 0.35, -mitad - 0.35], [mitad + 0.35, -mitad - 0.35],
+      [-mitad - 0.35, mitad + 0.35], [mitad + 0.35, mitad + 0.35],
+    ];
 
-    this.contraBlancas = new THREE.SpotLight(0xffe6bf, 7.5, 22, Math.PI / 2.8, 0.6, 1.1);
-    this.contraBlancas.position.set(0, 2.6, -7.2);
-    this.contraBlancas.target.position.set(0, 1, -3.5);
-    this.escena.add(this.contraBlancas, this.contraBlancas.target);
+    const cvLlama = document.createElement("canvas");
+    cvLlama.width = cvLlama.height = 128;
+    const lctx = cvLlama.getContext("2d");
+    const gLlama = lctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gLlama.addColorStop(0, "rgba(255,244,200,0.95)");
+    gLlama.addColorStop(0.35, "rgba(255,170,60,0.75)");
+    gLlama.addColorStop(0.75, "rgba(255,90,20,0.28)");
+    gLlama.addColorStop(1, "rgba(255,60,10,0)");
+    lctx.fillStyle = gLlama;
+    lctx.fillRect(0, 0, 128, 128);
+    const texLlama = new THREE.CanvasTexture(cvLlama);
+
+    const matPoste = new THREE.MeshStandardMaterial({ color: 0x241d16, roughness: 0.75, metalness: 0.25 });
+    const matCuenco = new THREE.MeshStandardMaterial({ color: 0x2e2419, roughness: 0.6, metalness: 0.4 });
+
+    for (const [ex, ez] of esquinas) {
+      const grupo = new THREE.Group();
+      grupo.position.set(ex, 0, ez);
+
+      const ALTO_POSTE = 1.55;
+      const poste = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, ALTO_POSTE, 10), matPoste);
+      poste.position.y = ALTO_POSTE / 2;
+      poste.castShadow = true;
+      grupo.add(poste);
+
+      const cuenco = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.08, 0.14, 12), matCuenco);
+      cuenco.position.y = ALTO_POSTE + 0.02;
+      grupo.add(cuenco);
+
+      const llama = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: texLlama, transparent: true, blending: THREE.AdditiveBlending,
+        depthWrite: false, opacity: 0.95, fog: false,
+      }));
+      llama.scale.set(0.55, 0.75, 1);
+      llama.position.y = ALTO_POSTE + 0.22;
+      grupo.add(llama);
+
+      const luz = new THREE.PointLight(0xff9a3c, 3.2, 9, 1.8);
+      luz.position.y = ALTO_POSTE + 0.25;
+      grupo.add(luz);
+
+      this.escena.add(grupo);
+      this._antorchas.push({ llama, luz, fase: Math.random() * 10 });
+    }
   }
 
   _crearHabitacion() {
@@ -525,6 +557,17 @@ class Ajedrez2Tablero3D {
       const p = Math.sin(this._tiempo * 3.1) * 0.22 + Math.sin(this._tiempo * 11.3) * 0.1;
       this.luzInferior.intensity = this._intensidadLuzInferiorBase + p * (this._intensidadLuzInferiorBase / 2.8);
       if (this._discoGlowInferior) this._discoGlowInferior.material.opacity = Math.max(0.5, this._opacidadGlowInferiorBase + p * 0.12);
+    }
+
+    // titileo de las antorchas: cada una con su propia fase (Math.random()
+    // al crearlas) para que no titilen todas sincronizadas — dos senos de
+    // distinta frecuencia superpuestos, mismo truco que la luz del hueco.
+    if (this._antorchas) {
+      for (const a of this._antorchas) {
+        const p = Math.sin((this._tiempo + a.fase) * 6.5) * 0.5 + Math.sin((this._tiempo + a.fase) * 17) * 0.25;
+        a.luz.intensity = 3.2 + p;
+        a.llama.scale.set(0.55 + p * 0.05, 0.75 + p * 0.07, 1);
+      }
     }
 
     const r = this._distancia;

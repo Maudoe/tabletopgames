@@ -1,0 +1,357 @@
+// ============ "Ajedrez 2.0" — sala de personajes en 3D ============
+// Todavía NO es un ajedrez jugable: es la vidriera para validar el arte
+// antes de meterle el motor de reglas — mismo criterio que ya se acordó
+// con el usuario (personaje por personaje, primero comprobar que se vea
+// bien parado en el tablero). Reutiliza la sala/pedestal/luz LED de
+// Go/Ajedrez/Damas (código copiado, mismo patrón que ya usan esos tres
+// archivos) y los tableros de mármol + oro que ya existen para Damas
+// (PALETA_TABLEROS_DAMAS, de damas3d.js — pedido explícito del usuario:
+// "reutiliza esos tableros"). Las piezas son los personajes 3D reales
+// (ver js/personajes/*.js + js/personajes_loader.mjs) en vez de geometría
+// procedural.
+class Ajedrez2Tablero3D {
+  constructor(contenedor) {
+    this.contenedor = contenedor;
+
+    this.escena = new THREE.Scene();
+    this.escena.background = null;
+
+    this.camara = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.dom = this.renderer.domElement;
+    contenedor.appendChild(this.dom);
+
+    this._grupoPiezas = new THREE.Group();
+
+    this._azimut = 0.08;
+    this._elevacion = 0.78;
+    this._distancia = 15;
+    this._zoomMin = 8.5;
+    this._zoomMax = 34;
+    this._arrastrando = false;
+    this._ultimoPuntero = { x: 0, y: 0 };
+    this._tiempo = 0;
+
+    this._rtCubo = new THREE.WebGLCubeRenderTarget(128, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
+    this._cuboCamara = new THREE.CubeCamera(0.05, 50, this._rtCubo);
+    this._cuboCamara.position.set(0, 0.06, 0);
+    this._frameCubo = 0;
+
+    this._crearLuces();
+    this._crearHabitacion();
+    this.escena.add(this._cuboCamara);
+    this._crearTableroBase("rojoNegro");
+    this.escena.add(this._grupoPiezas);
+    this._eventos();
+    this._loop = this._loop.bind(this);
+    requestAnimationFrame(this._loop);
+    this.resize();
+    window.addEventListener("resize", () => this.resize());
+  }
+
+  _crearLuces() {
+    const hemi = new THREE.HemisphereLight(0x8a734a, 0x0a0806, 0.5);
+    this.escena.add(hemi);
+    this.key = new THREE.DirectionalLight(0xfff2d8, 1.9);
+    this.key.position.set(-4.2, 6.5, 3.4);
+    this.key.castShadow = true;
+    this.key.shadow.mapSize.set(2048, 2048);
+    this.key.shadow.camera.left = -6;
+    this.key.shadow.camera.right = 6;
+    this.key.shadow.camera.top = 6;
+    this.key.shadow.camera.bottom = -6;
+    this.key.shadow.camera.near = 1;
+    this.key.shadow.camera.far = 20;
+    this.key.shadow.bias = -0.0018;
+    this.key.shadow.radius = 4;
+    this.escena.add(this.key);
+    const fill = new THREE.DirectionalLight(0x9db4d9, 0.4);
+    fill.position.set(5, 3, -4);
+    this.escena.add(fill);
+  }
+
+  _crearHabitacion() {
+    const PISO_Y = -1.6;
+    this.escena.background = new THREE.Color(0x08080a);
+    this.escena.fog = new THREE.Fog(0x08080a, 12, 30);
+
+    const geoPiso = new THREE.PlaneGeometry(120, 120);
+    geoPiso.rotateX(-Math.PI / 2);
+    const matPiso = new THREE.MeshStandardMaterial({ color: 0x0e0e10, roughness: 0.75, metalness: 0.15 });
+    const piso = new THREE.Mesh(geoPiso, matPiso);
+    piso.position.y = PISO_Y;
+    piso.receiveShadow = true;
+    this.escena.add(piso);
+
+    const acento = new THREE.PointLight(0x5b6f9c, 1.1, 16, 2);
+    acento.position.set(-6, 1.4, -5);
+    this.escena.add(acento);
+
+    const posLuna = new THREE.Vector3(-3.5, 9.5, -9);
+    const luna = new THREE.Mesh(
+      new THREE.SphereGeometry(1.2, 32, 32),
+      new THREE.MeshBasicMaterial({ color: 0xe8eefb, toneMapped: false, fog: false })
+    );
+    luna.position.copy(posLuna);
+    this.escena.add(luna);
+
+    const cvLuna = document.createElement("canvas");
+    cvLuna.width = cvLuna.height = 256;
+    const lctx = cvLuna.getContext("2d");
+    const halo = lctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+    halo.addColorStop(0, "rgba(215,228,255,0.75)");
+    halo.addColorStop(0.4, "rgba(180,200,240,0.28)");
+    halo.addColorStop(1, "rgba(160,190,230,0)");
+    lctx.fillStyle = halo;
+    lctx.fillRect(0, 0, 256, 256);
+    const haloLuna = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(cvLuna), transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8, fog: false,
+    }));
+    haloLuna.scale.set(4.4, 4.4, 1);
+    haloLuna.position.copy(posLuna);
+    this.escena.add(haloLuna);
+
+    this.luzLuna = new THREE.SpotLight(0xcfe0ff, 2.6, 42, Math.PI / 6, 0.92, 1.7);
+    this.luzLuna.position.copy(posLuna);
+    this.luzLuna.target.position.set(0, 0, 0);
+    this.luzLuna.castShadow = true;
+    this.luzLuna.shadow.mapSize.set(1024, 1024);
+    this.luzLuna.shadow.camera.near = 4;
+    this.luzLuna.shadow.camera.far = 24;
+    this.luzLuna.shadow.bias = -0.002;
+    this.escena.add(this.luzLuna, this.luzLuna.target);
+  }
+
+  _texturaCasillas(tipo) {
+    // idéntica a DamasTablero3D._texturaCasillas — mismo mármol/oro.
+    const cfg = PALETA_TABLEROS_DAMAS[tipo] || PALETA_TABLEROS_DAMAS.clasico;
+    const N = 1024, cell = N / 8;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = N;
+    const ctx = cv.getContext("2d");
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        const clara = (x + y) % 2 === 0;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x * cell, y * cell, cell, cell);
+        ctx.clip();
+        ctx.fillStyle = clara ? cfg.c1 : cfg.c3;
+        ctx.fillRect(x * cell, y * cell, cell, cell);
+        ctx.filter = `blur(${cell * 0.12}px)`;
+        for (let i = 0; i < 5; i++) {
+          ctx.fillStyle = i % 2 === 0 ? (clara ? cfg.vetaOscura : cfg.vetaClara) : (clara ? cfg.vetaClara : cfg.vetaOscura);
+          ctx.globalAlpha = 0.16 + Math.random() * 0.16;
+          const cx = x * cell + Math.random() * cell, cy = y * cell + Math.random() * cell;
+          const r = cell * (0.18 + Math.random() * 0.26);
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, r, r * (0.5 + Math.random() * 0.6), Math.random() * Math.PI, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.filter = "none";
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+    }
+    if (cfg.marmol && cfg.oro) {
+      ctx.strokeStyle = cfg.oro;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = N * 0.0026;
+      for (let i = 0; i <= 8; i++) {
+        ctx.beginPath(); ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, N); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i * cell); ctx.lineTo(N, i * cell); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    return tex;
+  }
+
+  _crearTableroBase(tipoTablero) {
+    if (this._grupoTablero) {
+      this.escena.remove(this._grupoTablero);
+      this._grupoTablero.traverse((o) => {
+        if (o.geometry) o.geometry.dispose();
+        if (Array.isArray(o.material)) o.material.forEach((m) => { m.map?.dispose(); m.dispose(); });
+        else if (o.material) { o.material.map?.dispose(); o.material.dispose(); }
+      });
+    }
+    this.tipoTablero = tipoTablero;
+    const cfg = PALETA_TABLEROS_DAMAS[tipoTablero] || PALETA_TABLEROS_DAMAS.clasico;
+    const grosor = 0.3;
+    const geoBase = new THREE.BoxGeometry(8, grosor, 8);
+    const texTop = this._texturaCasillas(tipoTablero);
+    const dorado = !!cfg.marmol;
+    const matLateral = new THREE.MeshPhysicalMaterial({
+      color: cfg.lateral, roughness: dorado ? 0.22 : 0.35, metalness: dorado ? 0.85 : 0.1,
+      clearcoat: 0.85, clearcoatRoughness: 0.1,
+      envMap: this._rtCubo.texture, envMapIntensity: dorado ? 1.1 : 0.5,
+    });
+    const matTop = new THREE.MeshPhysicalMaterial({
+      map: texTop, roughness: 0.1, metalness: dorado ? 0.12 : 0.05,
+      clearcoat: 1, clearcoatRoughness: 0.04,
+      envMap: this._rtCubo.texture, envMapIntensity: 0.9,
+    });
+    const base = new THREE.Mesh(geoBase, [matLateral, matLateral, matTop, matLateral, matLateral, matLateral]);
+    base.position.y = -grosor / 2;
+    base.receiveShadow = true;
+    base.castShadow = true;
+
+    const grosorMarco = 0.34;
+    const marcoGeo = new THREE.BoxGeometry(8 + grosorMarco * 2, grosor * 0.85, grosorMarco);
+    const marcoN = new THREE.Mesh(marcoGeo, matLateral); marcoN.position.set(0, -grosor * 0.42, -4 - grosorMarco / 2);
+    const marcoS = marcoN.clone(); marcoS.position.z = 4 + grosorMarco / 2;
+    const marcoLGeo = new THREE.BoxGeometry(grosorMarco, grosor * 0.85, 8);
+    const marcoE = new THREE.Mesh(marcoLGeo, matLateral); marcoE.position.set(-4 - grosorMarco / 2, -grosor * 0.42, 0);
+    const marcoO = marcoE.clone(); marcoO.position.x = 4 + grosorMarco / 2;
+    [marcoN, marcoS, marcoE, marcoO].forEach((m) => { m.castShadow = true; m.receiveShadow = true; });
+
+    this._grupoTablero = new THREE.Group();
+    this._grupoTablero.add(base, marcoN, marcoS, marcoE, marcoO);
+    this.escena.add(this._grupoTablero);
+
+    // pedestal + hueco con luz led (mismo criterio que el resto de la casa).
+    const anchoTableroTotal = 8 + grosorMarco * 2;
+    const HUECO = 0.55;
+    const ALTURA_PEDESTAL = 0.4;
+    const anchoPedestal = anchoTableroTotal * 0.94;
+    const techoHueco = -grosor;
+    const pisoHueco = techoHueco - HUECO;
+    const colorLuz = 0x4a7fd6;
+
+    const matPedestal = new THREE.MeshStandardMaterial({ color: cfg.lateral, roughness: 0.7, metalness: 0.08 });
+    const pedestal = new THREE.Mesh(new THREE.BoxGeometry(anchoPedestal, ALTURA_PEDESTAL, anchoPedestal), matPedestal);
+    pedestal.position.y = pisoHueco - ALTURA_PEDESTAL / 2;
+    pedestal.receiveShadow = true;
+    pedestal.castShadow = true;
+    this._grupoTablero.add(pedestal);
+
+    if (!this.luzInferior) {
+      this.luzInferior = new THREE.PointLight(colorLuz, 2.4, 22, 2);
+      this.escena.add(this.luzInferior);
+    }
+    this.luzInferior.position.set(0, (techoHueco + pisoHueco) / 2, 0);
+
+    this._grupoPiezas.clear();
+    this._piezasColocadas = null;
+  }
+
+  cambiarTablero(tipoTablero) { this._crearTableroBase(tipoTablero); this._recolocarSiHabia(); }
+  _recolocarSiHabia() { if (this._piezasColocadas) this.colocarPersonajes(this._piezasColocadas); }
+
+  _mundoDesdeCasilla(x, y) { return [x - 3.5, y - 3.5]; }
+
+  // `lista`: [{ id:'medievalKnight', x, y, equipo:'blanco'|'negro' }, ...]
+  // — showroom, no motor de reglas todavía: sólo pone cada personaje en su
+  // casilla, escalado a un alto razonable de ficha, con un disco de color
+  // bajo los pies marcando el equipo (el modelo en sí no se retiñe — son
+  // texturas pintadas a mano, cambiarles el color a lo bruto se ve mal).
+  colocarPersonajes(lista) {
+    this._piezasColocadas = lista;
+    this._grupoPiezas.clear();
+    const ALTURA_OBJETIVO = 0.85;
+
+    const porId = {};
+    lista.forEach((p) => { (porId[p.id] = porId[p.id] || []).push(p); });
+
+    Object.keys(porId).forEach((id) => {
+      window.cargarPersonajeGLTF(id, (gltf) => {
+        const caja = new THREE.Box3().setFromObject(gltf.scene);
+        const alto = caja.max.y - caja.min.y || 1;
+        const escala = ALTURA_OBJETIVO / alto;
+        const centroX = (caja.max.x + caja.min.x) / 2;
+        const pisoY = caja.min.y;
+
+        porId[id].forEach((p) => {
+          const modelo = gltf.scene.clone(true);
+          modelo.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          const grupo = new THREE.Group();
+          modelo.position.set(-centroX, -pisoY, 0);
+          grupo.add(modelo);
+          grupo.scale.setScalar(escala);
+
+          const [wx, wz] = this._mundoDesdeCasilla(p.x, p.y);
+          grupo.position.set(wx, 0, wz);
+          if (p.equipo === "negro") grupo.rotation.y = Math.PI;
+          this._grupoPiezas.add(grupo);
+
+          const colorEquipo = p.equipo === "negro" ? 0x1a1512 : 0xf0e6cf;
+          const discoGeo = new THREE.CylinderGeometry(0.34, 0.36, 0.03, 28);
+          const discoMat = new THREE.MeshPhysicalMaterial({
+            color: colorEquipo, roughness: 0.25, metalness: 0.3,
+            emissive: colorEquipo, emissiveIntensity: 0.12,
+            envMap: this._rtCubo.texture, envMapIntensity: 0.6,
+          });
+          const disco = new THREE.Mesh(discoGeo, discoMat);
+          disco.position.set(wx, 0.016, wz);
+          disco.receiveShadow = true;
+          this._grupoPiezas.add(disco);
+        });
+      }, (err) => console.error("No se pudo cargar el personaje " + id, err));
+    });
+  }
+
+  _eventos() {
+    const dom = this.renderer.domElement;
+    dom.addEventListener("pointerdown", (e) => {
+      this._arrastrando = true;
+      this._ultimoPuntero = { x: e.clientX, y: e.clientY };
+    });
+    window.addEventListener("pointerup", () => { this._arrastrando = false; });
+    window.addEventListener("pointermove", (e) => {
+      if (!this._arrastrando) return;
+      const dx = e.clientX - this._ultimoPuntero.x;
+      const dy = e.clientY - this._ultimoPuntero.y;
+      this._azimut = Math.min(1.15, Math.max(-1.15, this._azimut - dx * 0.006));
+      this._elevacion = Math.min(1.35, Math.max(0.55, this._elevacion - dy * 0.004));
+      this._ultimoPuntero = { x: e.clientX, y: e.clientY };
+    });
+    dom.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      this._distancia = Math.min(this._zoomMax, Math.max(this._zoomMin, this._distancia + e.deltaY * 0.012));
+    }, { passive: false });
+  }
+
+  resize() {
+    const w = this.contenedor.clientWidth || 480;
+    const h = this.contenedor.clientHeight || Math.round(w * 0.94);
+    this.renderer.setSize(w, h, false);
+    this.camara.aspect = w / h;
+    this.camara.updateProjectionMatrix();
+  }
+
+  _loop(t) {
+    requestAnimationFrame(this._loop);
+    this._tiempo = t * 0.001;
+
+    const r = this._distancia;
+    const cx = r * Math.sin(this._elevacion) * Math.sin(this._azimut);
+    const cz = r * Math.sin(this._elevacion) * Math.cos(this._azimut);
+    const cy = r * Math.cos(this._elevacion);
+    this.camara.position.set(cx, cy, cz);
+    this.camara.lookAt(0, 0.4, 0);
+
+    this._frameCubo = (this._frameCubo + 1) % 3;
+    if (this._frameCubo === 0 && this._grupoTablero) {
+      this._grupoTablero.visible = false;
+      this._cuboCamara.update(this.renderer, this.escena);
+      this._grupoTablero.visible = true;
+    }
+
+    this.renderer.render(this.escena, this.camara);
+  }
+
+  dispose() {
+    this.renderer.dispose();
+    if (this.renderer.domElement.parentNode) this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+  }
+}

@@ -44,6 +44,7 @@ $$(".tarjeta-juego").forEach((tarjeta) => {
     else if (juego === "ajedrez") abrirModalAjedrez();
     else if (juego === "teg") abrirModalTeg();
     else if (juego === "damas") abrirModalDamas();
+    else if (juego === "ajedrez2") abrirAjedrez2();
     else abrirModalPronto(juego);
   });
 });
@@ -1811,3 +1812,63 @@ function sonidoConquistaTeg() {
   gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
   osc.start(t0); osc.stop(t0 + 0.24);
 }
+
+// ================================================================
+// "AJEDREZ 2.0" — vidriera de personajes 3D (ver js/ajedrez2_3d.js)
+// ================================================================
+// Todavía no tiene motor de reglas — es la vista previa para validar el
+// arte personaje por personaje antes de construir el juego jugable de
+// verdad (acordado explícitamente con el usuario). Arma un tablero lleno
+// de instancias del único personaje ya procesado (medievalKnight, ver
+// js/personajes/medievalKnight.js y scripts/procesar_personaje.py) como
+// "ejército" de las dos filas de atrás, sólo para ver cómo se ve un
+// tablero lleno de verdad.
+let tablero3dAjedrez2 = null;
+let tableroAjedrez2Activo = "rojoNegro";
+
+function formacionVidrieraAjedrez2() {
+  const filas = [];
+  for (let x = 0; x < 8; x++) filas.push({ id: "medievalKnight", x, y: 0, equipo: "blanco" });
+  for (let x = 0; x < 8; x++) filas.push({ id: "medievalKnight", x, y: 7, equipo: "negro" });
+  return filas;
+}
+
+function inicializarTablero3dAjedrez2() {
+  if (tablero3dAjedrez2) return;
+  tablero3dAjedrez2 = new Ajedrez2Tablero3D($("#tablero-ajedrez2-madera"));
+}
+
+function abrirAjedrez2() {
+  $("#vista-juegos").classList.add("oculto");
+  $("#vista-ajedrez2").classList.remove("oculto");
+  document.body.classList.remove("menu-fondo");
+  inicializarTablero3dAjedrez2();
+  tablero3dAjedrez2.cambiarTablero(tableroAjedrez2Activo);
+  tablero3dAjedrez2.colocarPersonajes(formacionVidrieraAjedrez2());
+  tablero3dAjedrez2.resize();
+}
+
+$("#btn-volver-ajedrez2").addEventListener("click", () => {
+  $("#vista-ajedrez2").classList.add("oculto");
+  $("#vista-juegos").classList.remove("oculto");
+  document.body.classList.add("menu-fondo");
+});
+
+$("#seg-tablero-ajedrez2").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-tablero]");
+  if (!btn) return;
+  tableroAjedrez2Activo = btn.dataset.tablero;
+  $$("#seg-tablero-ajedrez2 button").forEach((b) => b.classList.toggle("activo", b === btn));
+  if (tablero3dAjedrez2) {
+    tablero3dAjedrez2.cambiarTablero(tableroAjedrez2Activo);
+    tablero3dAjedrez2.colocarPersonajes(formacionVidrieraAjedrez2());
+  }
+});
+
+$("#btn-pantalla-completa-ajedrez2").addEventListener("click", () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
+});
+document.addEventListener("fullscreenchange", () => {
+  if (tablero3dAjedrez2) setTimeout(() => tablero3dAjedrez2.resize(), 60);
+});

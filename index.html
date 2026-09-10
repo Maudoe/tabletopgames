@@ -88,6 +88,17 @@
           </span>
         </button>
 
+        <button class="tarjeta-juego" data-juego="ajedrez2">
+          <span class="fondo"></span>
+          <span class="icono">🛡️</span>
+          <span class="velo"></span>
+          <span class="pronto-badge">Beta — vidriera</span>
+          <span class="cuerpo">
+            <span class="nombre">Ajedrez 2.0</span>
+            <span class="desc">Personajes 3D reales en vez de fichas — todavía sin reglas, sólo para ver el arte</span>
+          </span>
+        </button>
+
       </div>
     </section>
 
@@ -236,6 +247,29 @@
         <div class="info-chip"><div class="num" id="mov-chip-damas">0</div><div class="etq">Jugadas</div></div>
       </div>
 
+    </section>
+
+    <!-- ---------------- vista: "Ajedrez 2.0" (vidriera, sin reglas todavía) ---------------- -->
+    <section id="vista-ajedrez2" class="vista vista-tablero oculto">
+      <div class="tablero-cabecera">
+        <div class="tablero-titulo">
+          <button class="btn-volver" id="btn-volver-ajedrez2">← Juegos</button>
+          <span class="turno-indicador"><span id="ajedrez2-texto">Vidriera — todavía sin reglas</span></span>
+        </div>
+        <div class="acciones-tablero">
+          <div class="segmentado" id="seg-tablero-ajedrez2">
+            <button class="activo" data-tablero="rojoNegro">Rojo y Negro</button>
+            <button data-tablero="blancoAzul">Blanco y Azul</button>
+          </div>
+          <button class="btn-accion" id="btn-pantalla-completa-ajedrez2">⛶ Pantalla completa</button>
+        </div>
+      </div>
+
+      <p class="teg-ayuda">Arrastrá para girar la cámara, rueda del mouse para acercar. Sólo el caballero medieval está listo por ahora — el resto de los personajes se van a ir agregando de a uno.</p>
+
+      <div class="tablero-envoltorio">
+        <div class="tablero-madera" id="tablero-ajedrez2-madera"></div>
+      </div>
     </section>
 
   </div>
@@ -606,6 +640,13 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+  <!-- GLTFLoader (para "Ajedrez 2.0", ver js/ajedrez2_3d.js) sólo existe como
+       módulo ES en esta versión de Three.js — este importmap le resuelve el
+       especificador "three" a los scripts clásicos de acá abajo les sigue
+       sin importar nada: siguen usando el THREE global de siempre. -->
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
   <script src="js/motorbot.js?v=3"></script>
   <script src="js/go.js?v=8"></script>
   <script src="js/gobot.js?v=5"></script>
@@ -617,6 +658,43 @@
   <script src="js/chess3d.js?v=20"></script>
   <script src="js/damas3d.js?v=2"></script>
   <script src="js/tegmapa.js?v=21"></script>
-  <script src="js/app.js?v=26"></script>
+  <!-- Puente módulo → script clásico para GLTFLoader (ver js/ajedrez2_3d.js).
+       Tiene que ser un <script type="module"> INLINE, no un src="..." local:
+       Chrome bloquea la carga de módulos ES desde archivos locales bajo
+       file:// (confirmado en vivo — a diferencia de un <script src="...">
+       clásico, que si funciona), pero un módulo con el código ya adentro
+       del HTML no necesita ir a buscar ningún archivo aparte. El import de
+       GLTFLoader en sí SÍ es una URL https:// real (jsdelivr), y esas cargan
+       bien incluso desde una página file:// — sólo los archivos LOCALES vía
+       módulo están bloqueados. GLTFLoader.parse() en vez de .load() por el
+       mismo motivo (ver scripts/procesar_personaje.py): .load() usa fetch/
+       XHR por dentro, bloqueados contra archivos locales; .parse() procesa
+       bytes que ya están en memoria (el personaje viaja embebido en Base64
+       en js/personajes/*.js), sin tocar la red para nada. -->
+  <script type="module">
+    import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+    const _loader = new GLTFLoader();
+    const _cache = {};
+    function _base64ABuffer(b64) {
+      const bin = atob(b64);
+      const buf = new ArrayBuffer(bin.length);
+      const vista = new Uint8Array(buf);
+      for (let i = 0; i < bin.length; i++) vista[i] = bin.charCodeAt(i);
+      return buf;
+    }
+    window.cargarPersonajeGLTF = function (id, onLoad, onError) {
+      if (_cache[id]) { onLoad(_cache[id]); return; }
+      const datos = window.PERSONAJES_DATA && window.PERSONAJES_DATA[id];
+      if (!datos) { onError(new Error("Personaje no encontrado: " + id)); return; }
+      try {
+        const buf = _base64ABuffer(datos);
+        _loader.parse(buf, "", (gltf) => { _cache[id] = gltf; onLoad(gltf); }, onError);
+      } catch (e) { onError(e); }
+    };
+    window.dispatchEvent(new Event("personajes-loader-listo"));
+  </script>
+  <script src="js/personajes/medievalKnight.js?v=1"></script>
+  <script src="js/ajedrez2_3d.js?v=1"></script>
+  <script src="js/app.js?v=28"></script>
 </body>
 </html>

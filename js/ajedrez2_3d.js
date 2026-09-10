@@ -19,7 +19,7 @@ class Ajedrez2Tablero3D {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.toneMappingExposure = 1.35;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.dom = this.renderer.domElement;
@@ -60,9 +60,15 @@ class Ajedrez2Tablero3D {
   }
 
   _crearLuces() {
-    const hemi = new THREE.HemisphereLight(0x8a734a, 0x0a0806, 0.62);
+    // Pasada de luz mucho más generosa que el resto de la casa a propósito
+    // — pedido explícito y repetido ("sigo sintiendo el tablero muy oscuro,
+    // cuesta distinguir a las fichas"): acá las piezas SON el contenido
+    // (personajes con detalle real, no geometría simple), así que se
+    // prioriza que se vean claramente por sobre el clima de estudio oscuro
+    // que sí tiene sentido en Go/Ajedrez/Damas.
+    const hemi = new THREE.HemisphereLight(0xaab4d6, 0x14100c, 1.1);
     this.escena.add(hemi);
-    this.key = new THREE.DirectionalLight(0xfff2d8, 2.3);
+    this.key = new THREE.DirectionalLight(0xfff2d8, 3.4);
     this.key.position.set(-4.2, 6.5, 3.4);
     this.key.castShadow = true;
     this.key.shadow.mapSize.set(2048, 2048);
@@ -75,15 +81,23 @@ class Ajedrez2Tablero3D {
     this.key.shadow.bias = -0.0018;
     this.key.shadow.radius = 4;
     this.escena.add(this.key);
-    const fill = new THREE.DirectionalLight(0x9db4d9, 0.6);
+    const fill = new THREE.DirectionalLight(0x9db4d9, 1.2);
     fill.position.set(5, 3, -4);
     this.escena.add(fill);
     // Relleno frontal suave, de frente a la cámara por defecto: sin esto
     // las piezas (sobre todo las negras, ya oscuras de por sí) se
     // comían casi toda la luz en su propia sombra frontal.
-    const frente = new THREE.DirectionalLight(0xd8e4ff, 0.55);
+    const frente = new THREE.DirectionalLight(0xd8e4ff, 1.3);
     frente.position.set(0, 4, 14);
     this.escena.add(frente);
+    // Relleno cenital, derecho de arriba: los otros focos son todos
+    // laterales/frontales, así que la parte de ARRIBA de cada personaje
+    // (cascos, hombros, alas) se quedaba en sombra propia — este es el que
+    // más se nota cuando "cuesta distinguir a las fichas" desde la cámara
+    // por default, que mira el tablero un poco desde arriba.
+    const cenital = new THREE.DirectionalLight(0xf5f0e6, 1.1);
+    cenital.position.set(0, 9, 0);
+    this.escena.add(cenital);
 
     // "Luz de contra" — un par de focos cálidos detrás de cada fila de
     // piezas (no del tablero: de las piezas), apuntando hacia la cámara,
@@ -91,12 +105,12 @@ class Ajedrez2Tablero3D {
     // explícito: "simular una luz atrás de las fichas negras". Se hace
     // para las dos filas (no sólo negras) porque blancas está igual de
     // lejos de la luna en la fila opuesta y se beneficia igual.
-    this.contraNegras = new THREE.SpotLight(0xbfd4ff, 5.5, 20, Math.PI / 3.2, 0.6, 1.4);
+    this.contraNegras = new THREE.SpotLight(0xbfd4ff, 9, 22, Math.PI / 2.8, 0.6, 1.1);
     this.contraNegras.position.set(0, 2.6, 7.2);
     this.contraNegras.target.position.set(0, 1, 3.5);
     this.escena.add(this.contraNegras, this.contraNegras.target);
 
-    this.contraBlancas = new THREE.SpotLight(0xffe6bf, 4.5, 20, Math.PI / 3.2, 0.6, 1.4);
+    this.contraBlancas = new THREE.SpotLight(0xffe6bf, 7.5, 22, Math.PI / 2.8, 0.6, 1.1);
     this.contraBlancas.position.set(0, 2.6, -7.2);
     this.contraBlancas.target.position.set(0, 1, -3.5);
     this.escena.add(this.contraBlancas, this.contraBlancas.target);
@@ -105,7 +119,11 @@ class Ajedrez2Tablero3D {
   _crearHabitacion() {
     const PISO_Y = -1.6;
     this.escena.background = new THREE.Color(0x08080a);
-    this.escena.fog = new THREE.Fog(0x08080a, 12, 30);
+    // Arranca bien más lejos que en el resto de la casa (12→22): con la
+    // cámara por default a distancia 15, la fila de atrás quedaba adentro
+    // de la niebla y se apagaba sola — acá no hay que perder detalle de
+    // las piezas por eso.
+    this.escena.fog = new THREE.Fog(0x08080a, 22, 46);
 
     const geoPiso = new THREE.PlaneGeometry(120, 120);
     geoPiso.rotateX(-Math.PI / 2);

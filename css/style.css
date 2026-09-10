@@ -125,19 +125,71 @@ h1, h2, h3, .serif { font-family: Georgia, "Times New Roman", serif; font-weight
    tienen que seguir alcanzables. */
 .pantalla-completa .cabecera { padding: 14px 0 10px; }
 .pantalla-completa .logo-imagen { height: 46px; }
-.pantalla-completa .reproductor-musica-cabecera { margin-top: 8px; }
+.pantalla-completa .reproductor-musica-cabecera { margin-top: 8px; padding: 4px 14px 4px 4px; }
+.pantalla-completa .btn-musica-nav { width: 26px; height: 26px; font-size: 0.8rem; }
+.pantalla-completa .btn-musica-play { width: 34px; height: 34px; font-size: 0.85rem; }
+.pantalla-completa .musica-info { display: none; }
 
 /* reproductor en la cabecera principal: centrado como el resto (el padre
    es text-align:center), visible en el menú y en las dos partidas porque
-   la cabecera nunca se oculta. */
-.reproductor-musica-cabecera { display: inline-flex; margin-top: 16px; }
+   la cabecera nunca se oculta. Antes era sólo botones sueltos con el
+   estilo genérico de .btn-accion — una cápsula de vidrio con dorado,
+   a tono con el resto del sitio (modales, cartas de juego), con el botón
+   de play como pieza central destacada en vez de un botón más del montón. */
+.reproductor-musica-cabecera {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 22px;
+  background: linear-gradient(170deg, #1c1811 0%, var(--carta) 60%, #100e0b 100%);
+  border: 1px solid rgba(var(--oro-rgb), 0.4);
+  border-radius: 40px;
+  padding: 6px 18px 6px 6px;
+  box-shadow: 0 0 0 1px rgba(6,5,5,0.75), 0 10px 26px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.btn-musica-nav {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: none; border: 1px solid transparent; color: var(--tenue);
+  font-size: 0.92rem; cursor: pointer; display: grid; place-items: center;
+  transition: all var(--transicion);
+}
+.btn-musica-nav:hover { color: var(--oro-claro); background: rgba(var(--oro-rgb), 0.1); border-color: rgba(var(--oro-rgb), 0.3); }
+
+.btn-musica-play {
+  width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+  background: var(--negro-2); border: 1px solid var(--borde); color: var(--blanco);
+  font-size: 1rem; cursor: pointer; display: grid; place-items: center;
+  transition: all var(--transicion);
+}
+.btn-musica-play:hover { border-color: var(--oro); color: var(--oro-claro); }
+/* sonando: se destaca como el centro de la cápsula, con un pulso suave —
+   mismo lenguaje visual que el brillo del agua de TEG, "está vivo". */
+.btn-musica-play.activo-musica {
+  background: linear-gradient(135deg, var(--oro-claro), var(--oro) 55%, var(--oro-oscuro));
+  border-color: var(--oro-claro); color: #17130c;
+  animation: musica-pulso 2.6s ease-in-out infinite;
+}
+@keyframes musica-pulso {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(var(--oro-rgb), 0.18), 0 4px 12px rgba(var(--oro-rgb), 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(var(--oro-rgb), 0.08), 0 4px 16px rgba(var(--oro-rgb), 0.45); }
+}
+
+.musica-info {
+  display: flex; flex-direction: column; justify-content: center;
+  min-width: 0; max-width: 150px; margin: 0 4px 0 8px;
+  text-align: left;
+}
+.musica-etiqueta { font-size: 0.62rem; letter-spacing: 0.5px; text-transform: uppercase; color: var(--tenue); opacity: 0.75; }
+.musica-titulo {
+  font-size: 0.8rem; font-weight: 700; color: var(--blanco);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 .volumen-musica {
   display: inline-flex; align-items: center; gap: 6px;
-  background: var(--carta); border: 1px solid var(--borde); border-radius: 40px;
-  padding: 9px 16px 9px 14px; font-size: 0.86rem; color: var(--tenue);
+  padding-left: 12px; margin-left: 4px; border-left: 1px solid var(--borde);
+  font-size: 0.86rem; color: var(--tenue);
 }
 .volumen-musica input[type="range"] {
-  width: 90px; accent-color: var(--oro);
+  width: 84px; accent-color: var(--oro);
 }
 
 /* ---------------- barra ---------------- */
@@ -474,13 +526,6 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
 .btn-accion.rojo:hover { background: rgba(var(--rojo-rgb), 0.15); border-color: var(--rojo-claro); }
 .btn-accion:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* reproductor de música: cluster compacto de anterior/play-pausa/siguiente,
-   visible siempre en la cabecera (antes sólo un toggle escondido dentro de
-   Opciones, difícil de encontrar). */
-.reproductor-musica { display: flex; gap: 6px; align-items: center; }
-.btn-musica-nav { padding: 9px 13px; }
-#btn-musica-play.activo-musica { border-color: var(--oro); color: var(--oro-claro); }
-
 /* Antes este panel sólo tenía padding y centraba un tablero de ancho fijo
    adentro (flex + justify-content), así que el panel en sí no tenía una
    altura propia — la altura la definía el canvas, quedando de nuevo un
@@ -640,7 +685,9 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
   .tablero-titulo { width: 100%; justify-content: center; }
   .acciones-tablero { width: 100%; justify-content: center; }
   .btn-accion { padding: 9px 14px; font-size: 0.8rem; }
-  .reproductor-musica-cabecera { flex-wrap: wrap; justify-content: center; }
+  .reproductor-musica-cabecera { flex-wrap: wrap; justify-content: center; border-radius: var(--radio); row-gap: 8px; }
+  .musica-info { display: none; } /* poco lugar en una fila que ya envuelve — el título no entra prolijo */
+  .volumen-musica { border-left: none; padding-left: 0; margin-left: 0; }
   .volumen-musica input[type="range"] { width: 64px; }
   .teg-fila-jugador { flex-wrap: wrap; gap: 6px; }
   .panel-lateral { gap: 8px; }

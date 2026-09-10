@@ -953,13 +953,23 @@ function _barajarMusica(arr) {
 function _asegurarOrdenMusica() {
   if (!ordenMusicaAjedrez.length) ordenMusicaAjedrez = _barajarMusica(PISTAS_MUSICA_AJEDREZ.map((_, i) => i));
 }
+// De "assets/music/khronos-red-queen.mp3" a "Khronos Red Queen" — para que
+// la cápsula de música muestre algo legible en vez del nombre de archivo
+// crudo (o nada).
+function _nombreLegiblePista(ruta) {
+  const archivo = ruta.split("/").pop().replace(/\.[a-z0-9]+$/i, "");
+  return archivo.replace(/-\d+$/, "").split(/[-_]+/).map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
+}
 function _cargarPistaMusica(indice) {
   if (!PISTAS_MUSICA_AJEDREZ.length) return;
   _asegurarOrdenMusica();
   indiceMusicaAjedrez = ((indice % ordenMusicaAjedrez.length) + ordenMusicaAjedrez.length) % ordenMusicaAjedrez.length;
+  const ruta = PISTAS_MUSICA_AJEDREZ[ordenMusicaAjedrez[indiceMusicaAjedrez]];
   const el = $("#musica-ajedrez");
-  el.src = PISTAS_MUSICA_AJEDREZ[ordenMusicaAjedrez[indiceMusicaAjedrez]];
+  el.src = ruta;
   el.play().catch(() => {});
+  const titulo = $("#musica-titulo");
+  if (titulo) titulo.textContent = _nombreLegiblePista(ruta);
 }
 function reproducirMusicaAjedrez() {
   if (!PISTAS_MUSICA_AJEDREZ.length) return;
@@ -970,15 +980,18 @@ function pausarMusicaAjedrez() { $("#musica-ajedrez").pause(); }
 function siguientePistaMusica() { _cargarPistaMusica(indiceMusicaAjedrez + 1); }
 function anteriorPistaMusica() { _cargarPistaMusica(indiceMusicaAjedrez - 1); }
 
-// Hay dos reproductores en la página (cabecera de Go y de Ajedrez, ambos
-// controlando el mismo <audio>), por eso todo esto va por clase — clic en
-// cualquiera de los dos actualiza los dos (querySelectorAll, no un id).
+// Un único reproductor global en la cabecera principal (visible en el menú
+// y en las tres partidas, ver .cabecera) — por clase igual que antes (no
+// por id) porque así, si algún día vuelve a haber más de un cluster de
+// controles en pantalla, se mantienen sincronizados solos.
 $("#musica-ajedrez").addEventListener("ended", siguientePistaMusica);
 $("#musica-ajedrez").addEventListener("play", () => {
-  $$(".btn-musica-play").forEach((b) => { b.textContent = "⏸ Música"; b.classList.add("activo-musica"); });
+  $$(".btn-musica-play").forEach((b) => { b.textContent = "⏸"; b.classList.add("activo-musica"); });
 });
 $("#musica-ajedrez").addEventListener("pause", () => {
-  $$(".btn-musica-play").forEach((b) => { b.textContent = "▶ Música"; b.classList.remove("activo-musica"); });
+  $$(".btn-musica-play").forEach((b) => { b.textContent = "▶"; b.classList.remove("activo-musica"); });
+  const titulo = $("#musica-titulo");
+  if (titulo && indiceMusicaAjedrez === -1) titulo.textContent = "En pausa";
 });
 $$(".btn-musica-play").forEach((b) => b.addEventListener("click", () => {
   const el = $("#musica-ajedrez");

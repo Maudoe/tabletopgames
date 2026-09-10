@@ -315,35 +315,31 @@ class TegMapa {
       ctx.beginPath(); ctx.ellipse(cx, cy, r, r * (0.4 + Math.random() * 0.5), Math.random() * Math.PI, 0, Math.PI * 2); ctx.fill();
     }
 
-    // capa 3 — vetas turquesa angostas (los "ríos de luz" de la mesa):
-    // pocas, finas y serpenteantes, no un lavado parejo.
-    ctx.filter = `blur(${W * 0.004}px)`;
-    ctx.globalAlpha = 0.5;
-    const vetas = [];
-    for (let i = 0; i < 6; i++) {
-      const y0 = H * (0.1 + Math.random() * 0.8);
-      const c1 = (Math.random() - 0.5) * H * 0.45, c2 = (Math.random() - 0.5) * H * 0.45, fin = (Math.random() - 0.5) * H * 0.3;
-      vetas.push([y0, c1, c2, fin]);
-      ctx.strokeStyle = "#1f7fa8";
-      ctx.lineWidth = W * (0.003 + Math.random() * 0.005);
-      ctx.beginPath();
-      ctx.moveTo(-20, y0);
-      ctx.bezierCurveTo(W * 0.33, y0 + c1, W * 0.66, y0 + c2, W + 20, y0 + fin);
-      ctx.stroke();
-    }
+    // capas 3 y 4 — el resplandor turquesa NO cruza el océano al azar:
+    // bordea la COSTA de los continentes (la propia silueta del SVG),
+    // como en la mesa de epoxy de referencia, donde la luz de la resina
+    // se concentra pegada al borde de la madera. Tres pasadas sobre el
+    // mismo contorno, de ancha/difusa a fina/encendida:
+    const marX = W * (1 - 0.92) / 2, marY = H * (1 - 0.86) / 2;
+    const costa = _combinarPathsMundo(marX, marY, W - marX * 2, H - marY * 2).combinado;
 
-    // capa 4 — núcleo caliente casi blanco ADENTRO de algunas de esas
-    // mismas vetas (no vetas nuevas): el "filamento" encendido.
+    ctx.filter = `blur(${W * 0.012}px)`;
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = "#1f7fa8";
+    ctx.lineWidth = W * 0.009;
+    ctx.stroke(costa);
+
+    ctx.filter = `blur(${W * 0.005}px)`;
     ctx.globalAlpha = 0.55;
-    for (let i = 0; i < 3; i++) {
-      const [y0, c1, c2, fin] = vetas[i * 2];
-      ctx.strokeStyle = "#9fe6f4";
-      ctx.lineWidth = W * 0.0016;
-      ctx.beginPath();
-      ctx.moveTo(-20, y0);
-      ctx.bezierCurveTo(W * 0.33, y0 + c1, W * 0.66, y0 + c2, W + 20, y0 + fin);
-      ctx.stroke();
-    }
+    ctx.strokeStyle = "#3fb9d8";
+    ctx.lineWidth = W * 0.004;
+    ctx.stroke(costa);
+
+    ctx.filter = `blur(${W * 0.0015}px)`;
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = "#9fe6f4";
+    ctx.lineWidth = W * 0.0014;
+    ctx.stroke(costa);
     ctx.filter = "none";
 
     // capa 5 — partículas en suspensión, apenas visibles.

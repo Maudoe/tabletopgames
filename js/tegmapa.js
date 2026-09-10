@@ -225,34 +225,41 @@ class TegMapa {
     });
   }
 
-  // Dibuja la capa "de fondo" del mapa: océano, grilla, la tierra real y el
-  // marco. Con 256 países ya no entra poner el nombre de todos a la vez
-  // (quedaba un empaste ilegible) — el nombre sólo se muestra del país
-  // sobre el que está el mouse (`idResaltado`), junto con un halo neón
-  // alrededor de su silueta real. Se llama una vez al armar la textura y
-  // de nuevo cada vez que cambia el hover (ver _refrescarHover) — las
-  // líneas de adyacencia NO van acá: viven en su propia capa animada
-  // (_crearOverlayLineas/_actualizarLineas), separada para no tener que
-  // repintar los 256 países + el marco en cada frame.
+  // Dibuja la capa de TIERRA sola, con fondo transparente (el agua vive
+  // aparte, ver _texturaAgua — esta capa flota como un plano encima de
+  // ella, mismo patrón que _planoLineas). Los países van con veta de
+  // madera de verdad (gradiente + vetas curvas, clipeadas a la silueta
+  // real de cada país vía this._pathTierra), sólidos como pidió el
+  // usuario — nada de vidrio acá, eso es sólo para el agua. Con 256
+  // países no entra poner el nombre de todos a la vez (quedaba un
+  // empaste ilegible) — el nombre sólo se muestra del país sobre el que
+  // está el mouse (`idResaltado`), con un halo dorado alrededor de su
+  // silueta real. Se llama una vez al armar la textura y de nuevo cada
+  // vez que cambia el hover.
   _dibujarCapasMapa(ctx, W, H, idResaltado) {
-    const oceano = ctx.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.5, W * 0.62);
-    oceano.addColorStop(0, "#152847");
-    oceano.addColorStop(1, "#050a14");
-    ctx.fillStyle = oceano;
-    ctx.fillRect(0, 0, W, H);
+    ctx.clearRect(0, 0, W, H);
 
-    ctx.strokeStyle = "rgba(201,169,97,0.06)";
-    ctx.lineWidth = 1.4;
-    for (let i = 1; i < 12; i++) { const x = (W / 12) * i; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let i = 1; i < 7; i++) { const y = (H / 7) * i; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-
-    // el mapa real (assets/world.svg, como vector) se dibuja ACÁ, entre el
-    // océano y el halo de hover.
     if (this._pathTierra) {
-      ctx.fillStyle = "#8a7a52";
-      ctx.fill(this._pathTierra);
-      ctx.strokeStyle = "rgba(10,8,5,0.35)";
-      ctx.lineWidth = 0.6;
+      ctx.save();
+      ctx.clip(this._pathTierra);
+      const madera = ctx.createLinearGradient(0, 0, W, H);
+      madera.addColorStop(0, "#caa15c"); madera.addColorStop(0.5, "#a97f3c"); madera.addColorStop(1, "#7a5230");
+      ctx.fillStyle = madera;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 0.1;
+      for (let i = 0; i < 70; i++) {
+        ctx.strokeStyle = i % 2 ? "#e8c988" : "#4a3418";
+        ctx.lineWidth = 1 + Math.random() * 1.8;
+        ctx.beginPath();
+        const y0 = Math.random() * H;
+        ctx.moveTo(0, y0);
+        ctx.bezierCurveTo(W * 0.33, y0 + (Math.random() - 0.5) * H * 0.12, W * 0.66, y0 + (Math.random() - 0.5) * H * 0.12, W, y0 + (Math.random() - 0.5) * H * 0.08);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      ctx.strokeStyle = "rgba(20,14,6,0.45)";
+      ctx.lineWidth = 0.7;
       ctx.stroke(this._pathTierra);
     }
 
@@ -276,9 +283,50 @@ class TegMapa {
     ctx.strokeStyle = "rgba(255,246,224,0.35)"; ctx.lineWidth = 2; ctx.strokeRect(10, 10, W - 20, H - 20);
   }
 
-  // El mapa mundi real (RUTAS_MUNDO_SVG, ver comentario arriba) ya está
-  // disponible sin ninguna carga asíncrona, así que la textura sale
-  // completa de una — nada de "arranca en blanco y se redibuja después".
+  // Textura del AGUA: gradiente tipo "resina/río de cristal" (turquesa
+  // profundo con vetas más claras, como la mesa de epoxy que pidió de
+  // referencia) — se usa como color Y como emissiveMap del material del
+  // tablero, así el brillo interior sigue las mismas vetas en vez de
+  // verse parejo; el pulso "se prende y apaga" lo anima
+  // `_intensidadAguaBase` en _loop, sin redibujar nada (barato).
+  _texturaAgua() {
+    const W = 1024, H = 576;
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+    const base = ctx.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.5, W * 0.65);
+    base.addColorStop(0, "#1c6b8a"); base.addColorStop(0.55, "#0e3a56"); base.addColorStop(1, "#051726");
+    ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
+
+    // "vetas" de luz, curvas suaves más claras — mismo mecanismo que la
+    // madera pero en tonos cian, para que el agua lea como un río de
+    // cristal iluminado, no un charco plano.
+    ctx.globalAlpha = 0.5;
+    ctx.filter = `blur(${W * 0.01}px)`;
+    for (let i = 0; i < 5; i++) {
+      ctx.strokeStyle = "#5fd4e8";
+      ctx.lineWidth = W * (0.01 + Math.random() * 0.012);
+      ctx.beginPath();
+      const y0 = H * (0.15 + Math.random() * 0.7);
+      ctx.moveTo(-20, y0);
+      ctx.bezierCurveTo(W * 0.33, y0 + (Math.random() - 0.5) * H * 0.3, W * 0.66, y0 + (Math.random() - 0.5) * H * 0.3, W + 20, y0 + (Math.random() - 0.5) * H * 0.2);
+      ctx.stroke();
+    }
+    ctx.filter = "none"; ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = "rgba(201,169,97,0.08)";
+    ctx.lineWidth = 1.2;
+    for (let i = 1; i < 12; i++) { const x = (W / 12) * i; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let i = 1; i < 7; i++) { const y = (H / 7) * i; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  // Capa de tierra: un plano transparente aparte (no la cara de arriba del
+  // tablero — esa es el agua, ver _texturaAgua) apoyado apenas encima del
+  // agua, mismo patrón que _planoLineas.
   _texturaMapa() {
     const W = 2048, H = 1152;
     const cv = document.createElement("canvas");
@@ -316,10 +364,19 @@ class TegMapa {
   _crearTableroYMapa() {
     const grosor = 0.34;
     const geoBase = new THREE.BoxGeometry(this.anchoMundo, grosor, this.profMundo);
-    const texTop = this._texturaMapa();
+    // La cara de arriba del tablero es el AGUA (cristal con luz adentro que
+    // pulsa, ver _texturaAgua/_loop) — los países van en un plano
+    // transparente aparte, apoyado encima (ver más abajo), no acá.
+    const texAgua = this._texturaAgua();
+    this._intensidadAguaBase = 0.55;
     const matLateral = new THREE.MeshStandardMaterial({ map: this._texturaLateralOscura(), roughness: 0.75, metalness: 0.06 });
-    const matTop = new THREE.MeshStandardMaterial({ map: texTop, roughness: 0.5, metalness: 0.04 });
-    const materiales = [matLateral, matLateral, matTop, matLateral, matLateral, matLateral];
+    const matAgua = new THREE.MeshPhysicalMaterial({
+      map: texAgua, emissiveMap: texAgua, emissive: new THREE.Color(0x3fc6e0),
+      emissiveIntensity: this._intensidadAguaBase, roughness: 0.12, metalness: 0,
+      clearcoat: 1, clearcoatRoughness: 0.06, reflectivity: 0.7,
+    });
+    this._matAgua = matAgua;
+    const materiales = [matLateral, matLateral, matAgua, matLateral, matLateral, matLateral];
     const base = new THREE.Mesh(geoBase, materiales);
     base.position.y = -grosor / 2;
     base.receiveShadow = true; base.castShadow = true;
@@ -327,6 +384,18 @@ class TegMapa {
     this._grupoTablero = new THREE.Group();
     this._grupoTablero.add(base);
     this.escena.add(this._grupoTablero);
+
+    // Los países, en un plano aparte flotando apenas encima del agua —
+    // fondo transparente donde no hay tierra, así el brillo del agua se ve
+    // por debajo (mismo patrón que _planoLineas, que va todavía más arriba).
+    const texTierra = this._texturaMapa();
+    const geoTierra = new THREE.PlaneGeometry(this.anchoMundo, this.profMundo);
+    geoTierra.rotateX(-Math.PI / 2);
+    const matTierra = new THREE.MeshStandardMaterial({ map: texTierra, transparent: true, roughness: 0.55, metalness: 0.04 });
+    this._planoTierra = new THREE.Mesh(geoTierra, matTierra);
+    this._planoTierra.position.y = 0.002;
+    this._planoTierra.receiveShadow = true;
+    this._grupoTablero.add(this._planoTierra);
 
     // pedestal + hueco + tira led, igual patrón que board3d.js/chess3d.js.
     if (!this._colorLuzInferior) this._colorLuzInferior = PALETA_LUCES_INFERIOR.azul.color;
@@ -405,41 +474,27 @@ class TegMapa {
     return geo;
   }
 
-  // Ficha "de lujo": mármol de verdad (vetas finas curvas, no manchas
-  // redondas) sobre un material de vidrio translúcido (transmission, no
-  // sólo brillo) — se nota el color al trasluz en vez de una piedra opaca.
+  // Ficha "gema": el intento anterior (mapa de mármol opaco + poca
+  // transmisión) se leía como una bolita de plástico/caramelo, no como
+  // piedra preciosa. Acá se saca el mapa de color por completo — nada de
+  // textura pintada encima tapando la transparencia — y en cambio se
+  // apoya todo en las propiedades físicas: transmisión bien alta (deja
+  // pasar la luz de verdad), un índice de refracción de gema (más que el
+  // 1.5 típico del vidrio) y un `attenuationColor` — el color no se pinta
+  // en la superficie, se ve como si tiñera la luz que atraviesa la piedra,
+  // más oscuro/saturado hacia el centro — que es justo el efecto "brilla
+  // desde adentro" de una gema tallada de verdad.
   _materialFicha(hex) {
     this._cacheMateriales = this._cacheMateriales || {};
     if (this._cacheMateriales[hex]) return this._cacheMateriales[hex];
-    const N = 128;
-    const cv = document.createElement("canvas");
-    cv.width = cv.height = N;
-    const ctx = cv.getContext("2d");
-    ctx.fillStyle = _mezclarColorTeg(hex, 0.08); ctx.fillRect(0, 0, N, N);
-
-    ctx.globalAlpha = 0.5;
-    ctx.filter = `blur(${N * 0.012}px)`;
-    for (let i = 0; i < 7; i++) {
-      ctx.strokeStyle = i % 2 ? _mezclarColorTeg(hex, 0.55) : _mezclarColorTeg(hex, -0.35);
-      ctx.lineWidth = 1 + Math.random() * 1.6;
-      ctx.beginPath();
-      const y0 = Math.random() * N;
-      ctx.moveTo(0, y0);
-      ctx.bezierCurveTo(N * 0.33, y0 + (Math.random() - 0.5) * N * 0.5, N * 0.66, y0 + (Math.random() - 0.5) * N * 0.5, N, y0 + (Math.random() - 0.5) * N * 0.3);
-      ctx.stroke();
-    }
-    ctx.filter = "none"; ctx.globalAlpha = 1;
-
-    const brillo = ctx.createRadialGradient(N * 0.32, N * 0.26, 0, N * 0.32, N * 0.26, N * 0.6);
-    brillo.addColorStop(0, "rgba(255,255,255,0.55)"); brillo.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = brillo; ctx.fillRect(0, 0, N, N);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
     const mat = new THREE.MeshPhysicalMaterial({
-      map: tex, color: hex, roughness: 0.08, metalness: 0,
-      transmission: 0.55, thickness: 0.6, ior: 1.5,
-      clearcoat: 1, clearcoatRoughness: 0.03, reflectivity: 0.6,
-      emissive: 0x000000,
+      color: hex,
+      roughness: 0.05, metalness: 0,
+      transmission: 0.6, thickness: 0.35, ior: 1.8,
+      attenuationColor: new THREE.Color(hex), attenuationDistance: 0.6,
+      clearcoat: 1, clearcoatRoughness: 0.05,
+      reflectivity: 1, specularIntensity: 1,
+      emissive: new THREE.Color(hex), emissiveIntensity: 0.18,
     });
     this._cacheMateriales[hex] = mat;
     return mat;
@@ -560,6 +615,7 @@ class TegMapa {
       const f = this._fichas[id];
       if (!f) continue;
       const color = coloresPorJugador[info.dueno] || "#666666";
+      f.colorActual = color;
       f.piedra.material = this._materialFicha(color);
       if (f.sprite.material.map) f.sprite.material.map.dispose();
       f.sprite.material.map = this._spriteNumero(String(info.ejercitos));
@@ -569,8 +625,7 @@ class TegMapa {
       const esResaltado = !!(opciones.resaltados && opciones.resaltados.includes(id));
       f.anillo.material.color.set(esSeleccion ? 0xffe08a : 0xff6a4a);
       f.anillo.material.opacity = esSeleccion || esResaltado ? 0.95 : 0;
-      f.piedra.material.emissive?.set(this._continenteResaltado && f.continente === this._continenteResaltado ? 0xff7a2c : 0x000000);
-      f.piedra.material.emissiveIntensity = 0.55;
+      this._pintarEmissive(f);
     }
     // Las líneas de conexión sólo se muestran en ataque/fortificación —
     // ahí es cuando importa ver quién linda con quién; en refuerzo sólo
@@ -621,11 +676,19 @@ class TegMapa {
   }
 
   _refrescarHover() {
-    for (const id of Object.keys(this._fichas)) {
-      const f = this._fichas[id];
-      const on = this._continenteResaltado && f.continente === this._continenteResaltado;
-      if (f.piedra.material.emissive) { f.piedra.material.emissive.set(on ? 0xff7a2c : 0x000000); f.piedra.material.emissiveIntensity = 0.55; }
-    }
+    for (const id of Object.keys(this._fichas)) this._pintarEmissive(this._fichas[id]);
+  }
+
+  // El material "gema" ya trae su propio brillo interior tenue (emissive =
+  // su propio color, a baja intensidad — ver _materialFicha); acá sólo se
+  // sube a un naranja fuerte cuando el continente de esta ficha está en
+  // hover, y si no, se restaura ese brillo propio (nunca a negro puro, o
+  // la piedra se apaga del todo y vuelve a leerse como plástico opaco).
+  _pintarEmissive(f) {
+    if (!f.piedra.material.emissive) return;
+    const on = this._continenteResaltado && f.continente === this._continenteResaltado;
+    if (on) { f.piedra.material.emissive.set(0xff7a2c); f.piedra.material.emissiveIntensity = 0.6; }
+    else { f.piedra.material.emissive.set(f.colorActual || "#666666"); f.piedra.material.emissiveIntensity = 0.18; }
   }
 
   _actualizarPuntero(e) {
@@ -680,6 +743,9 @@ class TegMapa {
     }
     this._actualizarElevacion();
     if (t - this._ultimoFrameLineas > 60) { this._ultimoFrameLineas = t; this._actualizarLineas(); }
+    // el agua "se prende y apaga" con un pulso lento y suave — mucho más
+    // lento que el parpadeo tipo neón de la luz del pedestal de abajo.
+    if (this._matAgua) this._matAgua.emissiveIntensity = this._intensidadAguaBase + Math.sin(this._tiempo * 0.6) * 0.28;
     const r = this._distancia;
     const cx = r * Math.sin(this._elevacion) * Math.sin(this._azimut);
     const cz = r * Math.sin(this._elevacion) * Math.cos(this._azimut);

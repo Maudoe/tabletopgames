@@ -821,8 +821,16 @@ class TegMapa {
 
       const esSeleccion = opciones.seleccion === id;
       const esResaltado = !!(opciones.resaltados && opciones.resaltados.includes(id));
-      f.anillo.material.color.set(esSeleccion ? 0xffe08a : 0xff6a4a);
-      f.anillo.material.opacity = esSeleccion || esResaltado ? 0.95 : 0;
+      // En refuerzo (antes de que aparezcan las líneas de ataque/
+      // fortificación) los territorios propios brillan con un aura celeste
+      // pulsante — así se ve de un vistazo dónde se puede colocar, sin
+      // tener que leer los 256 números uno por uno. Se apaga sola apenas
+      // cambia de fase (las líneas rojas/verdes la reemplazan).
+      f.esAura = teg.fase === "refuerzo" && info.dueno === teg.turno && !esSeleccion;
+      if (esSeleccion) { f.anillo.material.color.set(0xffe08a); f.anillo.material.opacity = 0.95; }
+      else if (esResaltado) { f.anillo.material.color.set(0xff6a4a); f.anillo.material.opacity = 0.95; }
+      else if (f.esAura) { f.anillo.material.color.set(0x7fe0ff); f.anillo.material.opacity = 0.35; }
+      else { f.anillo.material.opacity = 0; }
       this._pintarEmissive(f);
     }
     // Las líneas de conexión sólo se muestran en ataque/fortificación —
@@ -927,11 +935,13 @@ class TegMapa {
   // vez de tildarse arriba/abajo de golpe.
   _actualizarElevacion() {
     const SUBIDA = 0.13, VELOCIDAD = 0.09;
+    const pulsoAura = 0.32 + Math.sin(this._tiempo * 2.2) * 0.16;
     for (const id in this._fichas) {
       const f = this._fichas[id];
       const objetivo = id === this._territorioHover ? SUBIDA : 0;
       f.hoverActual += (objetivo - f.hoverActual) * VELOCIDAD;
       f.grupo.position.y = f.alturaY + f.hoverActual;
+      if (f.esAura) f.anillo.material.opacity = pulsoAura;
     }
   }
 

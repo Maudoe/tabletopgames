@@ -112,33 +112,11 @@ h1, h2, h3, .serif { font-family: Georgia, "Times New Roman", serif; font-weight
 /* ---------------- encabezado ---------------- */
 .cabecera { padding: 46px 0 30px; text-align: center; position: relative; }
 .logo-marca {
-  display: inline-flex; align-items: center; gap: 14px;
-  font-family: Georgia, serif; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
 }
-.logo-tablero {
-  width: 46px; height: 46px; border-radius: 10px;
-  background: linear-gradient(160deg, #caa15c 0%, #a97f3c 100%);
-  position: relative;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.15);
-}
-.logo-tablero::before {
-  content: "";
-  position: absolute; inset: 7px;
-  background-image:
-    linear-gradient(#2a2015 1px, transparent 1px),
-    linear-gradient(90deg, #2a2015 1px, transparent 1px);
-  background-size: calc(100% / 4) calc(100% / 4);
-  opacity: 0.55;
-}
-.logo-tablero::after {
-  content: "";
-  position: absolute; width: 10px; height: 10px; border-radius: 50%;
-  top: 50%; left: 50%; transform: translate(-50%, -50%);
-  background: radial-gradient(circle at 35% 30%, #2a2620, #060504 72%);
-  box-shadow: 9px -9px 0 0 #f4efe2, 9px 9px 0 0 #060504, -9px 9px 0 0 #f4efe2;
-}
-.logo-texto { font-size: 2rem; letter-spacing: 1px; }
-.logo-texto .hub { color: var(--oro); }
+/* Logo real (assets/logo_gamehub.png, provisto por el usuario) en vez del
+   ícono+texto armado con CSS que había antes. */
+.logo-imagen { height: 92px; width: auto; display: block; filter: drop-shadow(0 6px 16px rgba(0,0,0,0.55)); }
 .lema {
   margin-top: 10px; color: var(--tenue); font-size: 0.95rem;
   letter-spacing: 0.4px;
@@ -150,8 +128,7 @@ h1, h2, h3, .serif { font-family: Georgia, "Times New Roman", serif; font-weight
    controles de música, que tienen que seguir alcanzables. */
 .pantalla-completa .cabecera { padding: 14px 0 10px; }
 .pantalla-completa .lema { display: none; }
-.pantalla-completa .logo-tablero { width: 30px; height: 30px; }
-.pantalla-completa .logo-texto { font-size: 1.3rem; }
+.pantalla-completa .logo-imagen { height: 46px; }
 .pantalla-completa .reproductor-musica-cabecera { margin-top: 8px; }
 
 /* reproductor en la cabecera principal: centrado como el resto (el padre
@@ -466,7 +443,12 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
    tablero, para no tener que salir de pantalla completa para alcanzarla. */
 .pantalla-completa .tablero-cabecera {
   position: sticky; top: 0; z-index: 20;
-  margin: -26px -26px 16px; padding: 14px 26px 12px;
+  /* el margin-bottom real terminaba comiéndose ~26px del contenido de
+     abajo (el título del panel de Go/Ajedrez, el texto de ayuda de TEG
+     quedaban tapados a medias por esta barra) — con position:sticky el
+     margin-top negativo no deja tanto lugar como parece a simple vista,
+     así que el bottom compensa de más para que quede un margen real. */
+  margin: -26px -26px 42px; padding: 14px 26px 12px;
   background: rgba(8,7,6,0.92); backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--borde);
 }
@@ -654,7 +636,7 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
   .modal { width: 100%; padding: 22px 16px 20px; }
   .grilla-juegos { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   .cabecera { padding: 30px 0 20px; }
-  .logo-texto { font-size: 1.5rem; }
+  .logo-imagen { height: 64px; }
   .envoltorio { padding: 0 14px 70px; }
   .tablero-envoltorio, .mapa-envoltorio { height: min(48vh, 480px); }
   .pantalla-completa .vista-tablero { padding: 14px 12px 26px; }

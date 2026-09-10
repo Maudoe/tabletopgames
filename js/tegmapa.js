@@ -315,13 +315,21 @@ class TegMapa {
       ctx.beginPath(); ctx.ellipse(cx, cy, r, r * (0.4 + Math.random() * 0.5), Math.random() * Math.PI, 0, Math.PI * 2); ctx.fill();
     }
 
-    // capas 3 y 4 — el resplandor turquesa NO cruza el océano al azar:
-    // bordea la COSTA de los continentes (la propia silueta del SVG),
-    // como en la mesa de epoxy de referencia, donde la luz de la resina
-    // se concentra pegada al borde de la madera. Tres pasadas sobre el
-    // mismo contorno, de ancha/difusa a fina/encendida:
+    // capas 3 a 5 — el resplandor NO cruza el océano al azar: bordea la
+    // COSTA de los continentes (la propia silueta del SVG), como en la
+    // mesa de epoxy de referencia. Tres anillos concéntricos sobre el
+    // mismo contorno, de afuera hacia adentro: primero un halo VERDE bien
+    // ancho y difuso (el más lejos de la costa, mimetizándose con el azul
+    // oscuro del océano de fondo), después el turquesa medio, y por
+    // último el filamento casi blanco pegado al borde mismo de la tierra.
     const marX = W * (1 - 0.92) / 2, marY = H * (1 - 0.86) / 2;
     const costa = _combinarPathsMundo(marX, marY, W - marX * 2, H - marY * 2).combinado;
+
+    ctx.filter = `blur(${W * 0.022}px)`;
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = "#1f8a5c";
+    ctx.lineWidth = W * 0.02;
+    ctx.stroke(costa);
 
     ctx.filter = `blur(${W * 0.012}px)`;
     ctx.globalAlpha = 0.4;

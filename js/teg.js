@@ -1,120 +1,39 @@
 // ============ Motor de TEG (Táctica y Estrategia de la Guerra) ============
 // Versión "de mesa": reparto inicial al azar, fases refuerzo -> ataque ->
 // fortificación, combate por dados estilo TEG/Risk, cartas canjeables y
-// objetivos secretos. El mapa es fiel al ESTILO de TEG (6 continentes, ~40
-// territorios con nombres y vecinos plausibles) pero no una reproducción
-// cartográfica exacta de la edición TEG 2.0 — ver nota en el tablero 3D.
+// objetivos secretos. Los territorios son los 256 países reales de
+// js/worldpaises.js (el mapa que dibuja js/tegmapa.js), no una lista
+// "estilo TEG" — mucho más grande que un TEG de mesa clásico, a pedido
+// explícito: partidas más largas, reparto inicial más repartido.
 //
 // De 2 a 6 jugadores. Cada jugador es sólo `{ id, esBot }`; el color con el
 // que se pinta en pantalla es un tema de la UI (ver app.js), el motor no
 // sabe nada de eso.
 
-const CONTINENTES = {
-  america_norte:  { nombre: "América del Norte", bonus: 5 },
-  america_central:{ nombre: "América Central", bonus: 3 },
-  america_sur:    { nombre: "América del Sur", bonus: 4 },
-  europa:         { nombre: "Europa", bonus: 5 },
-  africa:         { nombre: "África", bonus: 3 },
-  asia_oceania:   { nombre: "Asia y Oceanía", bonus: 7 },
-};
+// Bonus por continente completo, proporcional a su cantidad de países
+// (fórmula tipo Risk clásico: mitad de los territorios, piso de 2) — con
+// 256 territorios los valores fijos de un TEG de mesa (3 a 7) quedarían
+// insignificantes al lado del resto de los refuerzos.
+const CONTINENTES = {};
+{
+  const nombres = {
+    america_norte: "América del Norte", america_central: "América Central",
+    america_sur: "América del Sur", europa: "Europa", africa: "África",
+    asia_oceania: "Asia y Oceanía",
+  };
+  const cuentas = {};
+  for (const id in PAISES_SVG) cuentas[PAISES_SVG[id].continente] = (cuentas[PAISES_SVG[id].continente] || 0) + 1;
+  for (const c in nombres) CONTINENTES[c] = { nombre: nombres[c], bonus: Math.max(2, Math.round((cuentas[c] || 0) / 2)) };
+}
 
-// { id: { nombre, continente, pos:[lat,lon] } } — coordenadas GPS reales
-// (una ciudad de referencia por territorio, normalmente la capital), no
-// posiciones inventadas: el mapa se dibuja sobre un mapa real de verdad
-// (Leaflet + tiles oscuros, ver js/tegmapa.js), así que cada territorio
-// tiene que caer en un punto real dentro de la región que representa. Los
-// vecinos se arman aparte, a partir de ARISTAS, para no escribir cada
-// conexión dos veces (una por cada lado).
-const TERRITORIOS_BASE = {
-  // -- América del Norte --
-  alaska:              { nombre: "Alaska", continente: "america_norte", pos: [64.20, -149.40] },
-  yukon:               { nombre: "Yukón", continente: "america_norte", pos: [60.70, -135.10] },
-  groenlandia:         { nombre: "Groenlandia", continente: "america_norte", pos: [64.18, -51.72] },
-  columbia_britanica:  { nombre: "Columbia Británica", continente: "america_norte", pos: [49.28, -123.12] },
-  quebec:              { nombre: "Quebec", continente: "america_norte", pos: [46.81, -71.21] },
-  eeuu:                { nombre: "Estados Unidos", continente: "america_norte", pos: [38.90, -77.04] },
-  mexico:              { nombre: "México", continente: "america_norte", pos: [19.43, -99.13] },
-
-  // -- América Central --
-  centroamerica:       { nombre: "Centroamérica", continente: "america_central", pos: [12.11, -86.24] },
-  panama:              { nombre: "Panamá", continente: "america_central", pos: [8.98, -79.52] },
-  antillas_mayores:    { nombre: "Antillas Mayores", continente: "america_central", pos: [23.13, -82.38] },
-  antillas_menores:    { nombre: "Antillas Menores", continente: "america_central", pos: [18.22, -66.59] },
-
-  // -- América del Sur --
-  colombia:            { nombre: "Colombia", continente: "america_sur", pos: [4.71, -74.07] },
-  venezuela:           { nombre: "Venezuela", continente: "america_sur", pos: [10.49, -66.88] },
-  brasil:              { nombre: "Brasil", continente: "america_sur", pos: [-15.79, -47.88] },
-  peru:                { nombre: "Perú", continente: "america_sur", pos: [-12.05, -77.04] },
-  argentina:           { nombre: "Argentina", continente: "america_sur", pos: [-34.61, -58.38] },
-  chile:               { nombre: "Chile", continente: "america_sur", pos: [-33.45, -70.66] },
-
-  // -- Europa --
-  islandia:            { nombre: "Islandia", continente: "europa", pos: [64.15, -21.94] },
-  gran_bretana:        { nombre: "Gran Bretaña", continente: "europa", pos: [51.51, -0.13] },
-  escandinavia:        { nombre: "Escandinavia", continente: "europa", pos: [59.33, 18.07] },
-  francia:             { nombre: "Francia", continente: "europa", pos: [48.86, 2.35] },
-  alemania:            { nombre: "Alemania", continente: "europa", pos: [52.52, 13.40] },
-  europa_del_sur:      { nombre: "Europa del Sur", continente: "europa", pos: [41.90, 12.50] },
-  rusia:               { nombre: "Rusia", continente: "europa", pos: [55.75, 37.62] },
-
-  // -- África --
-  egipto:              { nombre: "Egipto", continente: "africa", pos: [30.04, 31.24] },
-  africa_del_norte:    { nombre: "África del Norte", continente: "africa", pos: [33.57, -7.59] },
-  africa_occidental:   { nombre: "África Occidental", continente: "africa", pos: [6.52, 3.38] },
-  congo:               { nombre: "Congo", continente: "africa", pos: [-4.32, 15.31] },
-  africa_oriental:     { nombre: "África Oriental", continente: "africa", pos: [-1.29, 36.82] },
-  africa_del_sur:      { nombre: "África del Sur", continente: "africa", pos: [-26.20, 28.05] },
-  madagascar:          { nombre: "Madagascar", continente: "africa", pos: [-18.88, 47.51] },
-
-  // -- Asia y Oceanía --
-  medio_oriente:       { nombre: "Medio Oriente", continente: "asia_oceania", pos: [24.71, 46.68] },
-  ural:                { nombre: "Ural", continente: "asia_oceania", pos: [56.84, 60.61] },
-  siberia:             { nombre: "Siberia", continente: "asia_oceania", pos: [55.03, 82.92] },
-  kamchatka:           { nombre: "Kamchatka", continente: "asia_oceania", pos: [53.04, 158.65] },
-  mongolia:            { nombre: "Mongolia", continente: "asia_oceania", pos: [47.89, 106.91] },
-  china:               { nombre: "China", continente: "asia_oceania", pos: [39.90, 116.41] },
-  india:               { nombre: "India", continente: "asia_oceania", pos: [28.61, 77.21] },
-  indonesia:           { nombre: "Indonesia", continente: "asia_oceania", pos: [-6.21, 106.85] },
-  australia:           { nombre: "Australia", continente: "asia_oceania", pos: [-33.87, 151.21] },
-};
-
-const ARISTAS = [
-  // América del Norte
-  ["alaska", "yukon"], ["alaska", "columbia_britanica"], ["yukon", "columbia_britanica"],
-  ["yukon", "groenlandia"], ["groenlandia", "quebec"], ["columbia_britanica", "eeuu"],
-  ["quebec", "eeuu"], ["eeuu", "mexico"],
-  // AN <-> otros continentes
-  ["mexico", "centroamerica"], ["alaska", "kamchatka"], ["groenlandia", "islandia"],
-  // América Central
-  ["centroamerica", "panama"], ["centroamerica", "antillas_mayores"], ["panama", "antillas_mayores"],
-  ["antillas_mayores", "antillas_menores"],
-  ["panama", "colombia"], ["antillas_menores", "venezuela"],
-  // América del Sur
-  ["colombia", "venezuela"], ["colombia", "peru"], ["venezuela", "brasil"], ["brasil", "peru"],
-  ["brasil", "argentina"], ["peru", "chile"], ["argentina", "chile"],
-  // Europa
-  ["islandia", "gran_bretana"], ["islandia", "escandinavia"], ["gran_bretana", "francia"],
-  ["gran_bretana", "escandinavia"], ["escandinavia", "rusia"], ["escandinavia", "alemania"],
-  ["francia", "alemania"], ["francia", "europa_del_sur"], ["alemania", "europa_del_sur"],
-  ["alemania", "rusia"], ["europa_del_sur", "rusia"],
-  ["europa_del_sur", "egipto"], ["europa_del_sur", "africa_del_norte"],
-  ["rusia", "medio_oriente"], ["rusia", "ural"],
-  // África
-  ["egipto", "africa_del_norte"], ["africa_del_norte", "africa_occidental"], ["africa_del_norte", "congo"],
-  ["africa_occidental", "congo"], ["congo", "africa_oriental"], ["congo", "africa_del_sur"],
-  ["africa_oriental", "egipto"], ["africa_oriental", "africa_del_sur"], ["africa_oriental", "madagascar"],
-  ["africa_del_sur", "madagascar"],
-  ["egipto", "medio_oriente"],
-  // Asia y Oceanía
-  ["medio_oriente", "india"], ["ural", "siberia"], ["ural", "china"], ["siberia", "kamchatka"],
-  ["siberia", "mongolia"], ["siberia", "china"], ["kamchatka", "mongolia"], ["mongolia", "china"],
-  ["china", "india"], ["china", "indonesia"], ["india", "indonesia"], ["indonesia", "australia"],
-];
-
+// TERRITORIOS sale directo de PAISES_SVG (js/worldpaises.js, cargado antes
+// que este script — ver comentario ahí sobre cómo se generó): cada país
+// real del mapa es un territorio jugable, con sus vecinos ya calculados.
 const TERRITORIOS = {};
-for (const id of Object.keys(TERRITORIOS_BASE)) TERRITORIOS[id] = { ...TERRITORIOS_BASE[id], vecinos: [] };
-for (const [a, b] of ARISTAS) { TERRITORIOS[a].vecinos.push(b); TERRITORIOS[b].vecinos.push(a); }
+for (const id in PAISES_SVG) {
+  const p = PAISES_SVG[id];
+  TERRITORIOS[id] = { nombre: p.nombre, continente: p.continente, vecinos: p.vecinos };
+}
 
 const OBJETIVOS = [
   { id: "dominar3", descripcion: "Conquistar 3 continentes completos, cualquiera.", evaluar: (teg, j) => teg.continentesCompletos(j).length >= 3 },

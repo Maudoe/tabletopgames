@@ -1043,13 +1043,21 @@ function sonidoFichaAjedrez(esCaptura) {
 // selector de cuántas tropas mover tras conquistar (mueve una cantidad
 // razonable sola): se prioriza que el loop completo sea jugable de punta a
 // punta antes que cubrir cada variante de las reglas de mesa.
-const formTeg = { cantidadJugadores: 3, bots: [false, true, true, true, true, true], nivel: 5 };
+const formTeg = { cantidadJugadores: 3, bots: [false, true, true, true, true, true], nivel: 5, colorJugador: "azul" };
+
+// El jugador humano (seat 0) elige su color; el resto de los asientos se
+// reparte los colores que quedan, en el mismo orden de siempre — así nunca
+// hay dos jugadores con el mismo color aunque el humano cambie el suyo.
+function coloresOrdenTeg() {
+  return [formTeg.colorJugador, ...ORDEN_COLORES_TEG.filter((c) => c !== formTeg.colorJugador)];
+}
 
 function actualizarListaJugadoresTeg() {
   const cont = $("#teg-lista-jugadores");
   cont.innerHTML = "";
+  const orden = coloresOrdenTeg();
   for (let i = 0; i < formTeg.cantidadJugadores; i++) {
-    const cfg = PALETA_JUGADORES_TEG[ORDEN_COLORES_TEG[i]];
+    const cfg = PALETA_JUGADORES_TEG[orden[i]];
     const esVos = i === 0;
     const fila = document.createElement("div");
     fila.className = "campo-fila teg-fila-jugador";
@@ -1065,6 +1073,23 @@ function actualizarListaJugadoresTeg() {
   }
   $$(".teg-toggle-bot").forEach((chk) => {
     chk.addEventListener("change", (e) => { formTeg.bots[Number(e.target.dataset.idx)] = e.target.checked; });
+  });
+
+  // fila de swatches para elegir el color propio — abajo de la lista, no
+  // por jugador (sólo el humano elige; los bots se acomodan solos).
+  const filaColor = document.createElement("div");
+  filaColor.className = "campo";
+  filaColor.innerHTML = `<div class="campo-label">Tu color</div><div class="fila-swatches" id="teg-swatches-color"></div>`;
+  cont.append(filaColor);
+  const contSwatches = $("#teg-swatches-color");
+  ORDEN_COLORES_TEG.forEach((id) => {
+    const cfg = PALETA_JUGADORES_TEG[id];
+    const btn = document.createElement("button");
+    btn.className = "swatch-piedra" + (formTeg.colorJugador === id ? " activo" : "");
+    btn.style.background = cfg.color;
+    btn.title = cfg.nombre;
+    btn.addEventListener("click", () => { formTeg.colorJugador = id; actualizarListaJugadoresTeg(); });
+    contSwatches.append(btn);
   });
 }
 $("#teg-jugadores-menos").addEventListener("click", () => {
@@ -1139,7 +1164,8 @@ function inicializarMapaTeg() {
 }
 
 function coloresJugadoresTeg() {
-  return partidaTeg.jugadores.map((_, idx) => PALETA_JUGADORES_TEG[ORDEN_COLORES_TEG[idx]].color);
+  const orden = coloresOrdenTeg();
+  return partidaTeg.jugadores.map((_, idx) => PALETA_JUGADORES_TEG[orden[idx]].color);
 }
 
 function dibujarTeg() {

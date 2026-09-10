@@ -541,13 +541,17 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
 }
 
 /* ============================================================
-   TEG — mapa Leaflet (tiles reales oscuros), no una escena Three.js
+   TEG — misma escena 3D que Go/Ajedrez (ver js/tegmapa.js): mapa dibujado
+   en canvas sobre un tablero 3D, fichas como piedras pulidas de verdad.
    ============================================================ */
 .teg-ayuda {
   text-align: center; color: var(--tenue); font-size: 0.88rem; margin: 0 0 10px;
 }
 .mapa-envoltorio {
   height: min(70vh, 760px);
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 20%, rgba(var(--tinta-rgb), 0.32), transparent 68%),
+    linear-gradient(170deg, #10161f 0%, #12161c 55%, #070a0e 100%);
   border: 1px solid rgba(var(--oro-rgb), 0.4);
   border-radius: var(--radio);
   box-shadow: 0 0 0 1px rgba(6,5,5,0.75), var(--sombra);
@@ -558,46 +562,11 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
   max-width: 1700px;
   margin: 0 auto;
 }
-.mapa-teg { width: 100%; height: 100%; background: #02060a; }
-
-/* chrome oscuro de Leaflet, mismo criterio que el mapa cyberpunk de donde
-   se sacó la idea: controles de zoom y atribución legibles sobre el tema
-   oscuro en vez del blanco por defecto de la librería. */
-.mapa-teg .leaflet-control-zoom a {
-  background: rgba(20,16,10,0.92); color: var(--oro-claro);
-  border-color: rgba(var(--oro-rgb), 0.35);
-}
-.mapa-teg .leaflet-control-zoom a:hover { background: var(--oro); color: #17130c; }
-.mapa-teg .leaflet-control-attribution {
-  background: rgba(10,8,6,0.75); color: var(--tenue); font-size: 9px;
-}
-.mapa-teg .leaflet-control-attribution a { color: var(--oro-claro); }
-/* ficha de territorio: degradado radial (no un círculo plano) para que se
-   lea con volumen, tipo canica pulida — el color exacto se completa en JS
-   (tegmapa.js) según el dueño. */
-.teg-token-wrap { background: none !important; border: none !important; }
-.teg-token {
-  width: 26px; height: 26px; border-radius: 50%; box-sizing: border-box;
-  display: flex; align-items: center; justify-content: center;
-  border: 2px solid rgba(10,8,5,0.85);
-  box-shadow: 0 2px 5px rgba(0,0,0,0.65), inset 0 1px 2px rgba(255,255,255,0.35);
-  transition: box-shadow 160ms ease, transform 120ms ease;
-  cursor: pointer;
-}
-.teg-token:hover { transform: scale(1.08); }
-.teg-token-num {
-  color: #fff; font-weight: 800; font-size: 11px; text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-  pointer-events: none;
-}
-/* casilla elegida como origen: aro dorado grueso. */
-.teg-token--seleccion { box-shadow: 0 0 0 3px #ffe08a, 0 2px 6px rgba(0,0,0,0.7); }
-/* objetivos válidos (vecino enemigo atacable / destino de fortificación). */
-.teg-token--resaltado { box-shadow: 0 0 0 3px #ff6a4a, 0 2px 6px rgba(0,0,0,0.7); }
-/* hover: se ilumina todo el continente al que pertenece la ficha, en
-   naranja, para ver de un vistazo qué le falta para el bonus completo. */
-.teg-token--continente {
-  box-shadow: 0 0 0 3px rgba(255,140,40,0.75), 0 0 14px 5px rgba(255,140,40,0.55), inset 0 1px 2px rgba(255,255,255,0.35);
-}
+/* El mapa (canvas Three.js) lo inserta tegmapa.js acá adentro — mismo
+   criterio que .tablero-madera para Go/Ajedrez: ocupa el 100% del panel. */
+.mapa-teg { width: 100%; height: 100%; touch-action: none; }
+.mapa-teg canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.mapa-teg:active canvas { cursor: grabbing; }
 
 .teg-panel-detalle { margin-top: 18px; display: grid; gap: 16px; }
 .teg-fila-jugador {

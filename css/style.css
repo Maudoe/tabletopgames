@@ -115,19 +115,15 @@ h1, h2, h3, .serif { font-family: Georgia, "Times New Roman", serif; font-weight
   display: inline-flex; align-items: center; justify-content: center;
 }
 /* Logo real (assets/logo_gamehub.png, provisto por el usuario) en vez del
-   ícono+texto armado con CSS que había antes. */
-.logo-imagen { height: 92px; width: auto; display: block; filter: drop-shadow(0 6px 16px rgba(0,0,0,0.55)); }
-.lema {
-  margin-top: 10px; color: var(--tenue); font-size: 0.95rem;
-  letter-spacing: 0.4px;
-}
+   ícono+texto armado con CSS que había antes — y de la frase debajo, que
+   se sacó del todo (el logo solo ya funciona como marca). */
+.logo-imagen { height: 736px; width: auto; display: block; filter: drop-shadow(0 6px 16px rgba(0,0,0,0.55)); }
 
-/* Pantalla completa: la cabecera se achica al mínimo (sin la frase debajo
-   del logo, logo más chico) para que casi toda la pantalla quede para el
-   tablero/mapa — pero sin desaparecer del todo, porque ahí siguen los
-   controles de música, que tienen que seguir alcanzables. */
+/* Pantalla completa: la cabecera se achica al mínimo (logo más chico) para
+   que casi toda la pantalla quede para el tablero/mapa — pero sin
+   desaparecer del todo, porque ahí siguen los controles de música, que
+   tienen que seguir alcanzables. */
 .pantalla-completa .cabecera { padding: 14px 0 10px; }
-.pantalla-completa .lema { display: none; }
 .pantalla-completa .logo-imagen { height: 46px; }
 .pantalla-completa .reproductor-musica-cabecera { margin-top: 8px; }
 
@@ -636,7 +632,7 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
   .modal { width: 100%; padding: 22px 16px 20px; }
   .grilla-juegos { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   .cabecera { padding: 30px 0 20px; }
-  .logo-imagen { height: 64px; }
+  .logo-imagen { height: 180px; }
   .envoltorio { padding: 0 14px 70px; }
   .tablero-envoltorio, .mapa-envoltorio { height: min(48vh, 480px); }
   .pantalla-completa .vista-tablero { padding: 14px 12px 26px; }

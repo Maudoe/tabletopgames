@@ -656,7 +656,11 @@ function* buscarRaiz(ajedrez, profundidad, contador, mejorRef, prioridad) {
 async function jugadaDelAjedrez(ajedrez, color, skill = 0.6) {
   const candidatas = ajedrez.todosMovimientosLegales(color);
   if (candidatas.length === 0) return null;
-  if (Math.random() > skill) return candidatas[Math.floor(Math.random() * candidatas.length)];
+  // Cuadrático, igual que el bot de Go: los niveles medios piensan la gran
+  // mayoría de las jugadas (nivel 5: 3 de cada 4), sólo los niveles 1-2
+  // siguen siendo mayormente azar.
+  const probAzar = (1 - skill) * (1 - skill);
+  if (Math.random() < probAzar) return candidatas[Math.floor(Math.random() * candidatas.length)];
 
   const presupuesto = presupuestoPensadaMs(skill);
   const finGlobal = performance.now() + presupuesto;

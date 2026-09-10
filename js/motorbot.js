@@ -24,9 +24,11 @@ async function ejecutarBusquedaCooperativa(generador, presupuestoMs) {
 }
 
 // Presupuesto de pensada por jugada: escala con el nivel (skill 0-1 ya lo
-// arma app.js a partir del slider), de medio segundo a ~2.7s.
+// arma app.js a partir del slider), de medio segundo a ~3.7s. La curva es
+// cuadrática para que la diferencia real de fuerza se concentre en los
+// niveles altos: nivel 5 piensa ~1.3s, nivel 7 ~2.3s, nivel 9 ~3.7s.
 function presupuestoPensadaMs(skill) {
-  return 500 + skill * 2200;
+  return 500 + skill * skill * 3200;
 }
 
 // Red de seguridad dura: por más que la búsqueda ceda el control seguido

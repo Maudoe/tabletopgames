@@ -80,11 +80,11 @@ function jugarRapido(estado, i) {
 
   if (estado.anterior && arraysIguales(nuevo, estado.anterior)) return null; // ko simple
 
-  return { tablero: nuevo, size: estado.size, turno: rival, anterior: estado.tablero, pases: 0, numCapturas };
+  return { tablero: nuevo, size: estado.size, turno: rival, anterior: estado.tablero, pases: 0, numCapturas, ultimo: i };
 }
 
 function pasarRapido(estado) {
-  return { tablero: estado.tablero, size: estado.size, turno: otro(estado.turno), anterior: estado.tablero, pases: (estado.pases || 0) + 1 };
+  return { tablero: estado.tablero, size: estado.size, turno: otro(estado.turno), anterior: estado.tablero, pases: (estado.pases || 0) + 1, ultimo: null };
 }
 
 // Ojo verdadero simplificado (sólo mira los 4 vecinos ortogonales, no la
@@ -98,22 +98,59 @@ function esOjoVerdadero(tablero, size, i, color) {
   return true;
 }
 
-// Jugadas candidatas: vacíos jugables, evitando rellenar el propio ojo
-// verdadero salvo que no quede ninguna otra opción; "pasar" siempre entra
-// como una candidata más (así el árbol puede aprender a pasar cuando
-// conviene, en vez de tratarlo como un caso aparte).
+// Si la última jugada rival dejó un grupo propio en atari (una sola
+// libertad), devuelve la jugada que lo salva extendiendo a esa libertad —
+// pero SOLO si extender de verdad lo salva (el grupo queda con 2+ libertades
+// después): si extender no alcanza (escalera perdida), mejor dejarlo morir
+// que tirarle más piedras. Capturar al atacante también salva, pero de eso
+// ya se encarga la prioridad de capturas que corre antes que esto.
+// Esta era LA gran omisión del bot: priorizaba capturar pero nunca
+// priorizaba defenderse, así que dejaba morir grupos enteros sin pelear.
+function jugadaDefensaAtari(estado) {
+  const { tablero, size, turno } = estado;
+  if (estado.ultimo == null) return null;
+  for (const n of vecinosIdx(estado.ultimo, size)) {
+    if (tablero[n] !== turno) continue;
+    const { libertades } = grupoIdx(tablero, size, n);
+    if (libertades.size !== 1) continue;
+    const lib = [...libertades][0];
+    const r = jugarRapido(estado, lib);
+    if (!r) continue;
+    const despues = grupoIdx(r.tablero, size, n);
+    if (despues.libertades.size >= 2) return r;
+  }
+  return null;
+}
+
+function barajarLista(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Jugadas candidatas para expandir el árbol: vacíos jugables, evitando
+// rellenar el propio ojo verdadero salvo que no quede otra opción; "pasar"
+// siempre entra como una candidata más (así el árbol puede aprender a pasar
+// cuando conviene). Las capturas van PRIMERAS y el resto barajado: la
+// expansión del árbol toma siempre la primera sin probar (ver
+// iteracionMCTS), así las jugadas tácticamente urgentes se exploran antes
+// que el relleno neutral, en vez de gastar presupuesto parejo en todo.
 function movimientosLegalesRapidos(estado) {
   if ((estado.pases || 0) >= 2) return [];
   const { tablero, size, turno } = estado;
-  const vacios = [];
-  for (let i = 0; i < tablero.length; i++) if (tablero[i] === VACIO) vacios.push(i);
-
-  const sinOjoPropio = vacios.filter((i) => !esOjoVerdadero(tablero, size, i, turno) && jugarRapido(estado, i) !== null);
-  if (sinOjoPropio.length > 0) return [...sinOjoPropio, "pasar"];
-
-  const cualquiera = vacios.filter((i) => jugarRapido(estado, i) !== null);
-  if (cualquiera.length > 0) return [...cualquiera, "pasar"];
-
+  const capturan = [], normales = [], ojos = [];
+  for (let i = 0; i < tablero.length; i++) {
+    if (tablero[i] !== VACIO) continue;
+    const r = jugarRapido(estado, i);
+    if (!r) continue;
+    if (esOjoVerdadero(tablero, size, i, turno)) { ojos.push(i); continue; }
+    if (r.numCapturas > 0) capturan.push(i);
+    else normales.push(i);
+  }
+  if (capturan.length || normales.length) return [...capturan, ...barajarLista(normales), "pasar"];
+  if (ojos.length) return [...ojos, "pasar"];
   return ["pasar"];
 }
 
@@ -174,6 +211,12 @@ function elegirJugadaRollout(estado) {
     if (r.numCapturas > 0) return r;
     if (!mejorNoCaptura) mejorNoCaptura = r;
   }
+
+  // Sin captura a mano: antes de jugar cualquier cosa, ver si la última
+  // jugada rival dejó un grupo propio en atari y se puede salvar.
+  const defensa = jugadaDefensaAtari(estado);
+  if (defensa) return defensa;
+
   if (mejorNoCaptura) return mejorNoCaptura;
 
   // Red de seguridad barata: recorre el tablero una sola vez (sin filtrar
@@ -230,8 +273,10 @@ function iteracionMCTS(raiz, komi) {
 
   let nodoRollout = nodo;
   if (nodo.sinExpandir.length > 0) {
-    const idx = (Math.random() * nodo.sinExpandir.length) | 0;
-    const jugada = nodo.sinExpandir.splice(idx, 1)[0];
+    // Siempre la primera sin probar: la lista ya viene ordenada por
+    // prioridad táctica (capturas primero, resto barajado, pasar al final)
+    // desde movimientosLegalesRapidos.
+    const jugada = nodo.sinExpandir.shift();
     const estadoHijo = jugada === "pasar" ? pasarRapido(nodo.estado) : jugarRapido(nodo.estado, jugada);
     const hijo = crearNodo(estadoHijo, jugada, nodo);
     nodo.hijos.push(hijo);
@@ -303,11 +348,22 @@ async function jugadaDelBot(go, color, skill = 0.6) {
   }
   if (candidatasReales.length === 0) return null;
 
-  if (Math.random() > skill) {
+  // La probabilidad de jugar al azar cae CUADRÁTICO con el nivel, no
+  // lineal: antes nivel 5 jugaba la mitad de las jugadas sin pensar (se
+  // sentía tonto a los saltos); ahora nivel 5 piensa 3 de cada 4 jugadas,
+  // nivel 7 casi todas, nivel 9 todas — y los niveles 1-2 siguen siendo
+  // mayormente azar, vencibles para quien recién empieza.
+  const probAzar = (1 - skill) * (1 - skill);
+  if (Math.random() < probAzar) {
     return candidatasReales[(Math.random() * candidatasReales.length) | 0];
   }
 
-  const estadoRaiz = { tablero: Int8Array.from(go.board), size: go.size, turno: color, anterior: null, pases: 0 };
+  const estadoRaiz = {
+    tablero: Int8Array.from(go.board), size: go.size, turno: color, anterior: null, pases: 0,
+    // la última jugada real del rival, para que la heurística de defensa de
+    // atari del rollout aplique también en la primera respuesta del árbol
+    ultimo: go.ultimaJugada ? go.idx(go.ultimaJugada.x, go.ultimaJugada.y) : null,
+  };
   const raiz = crearNodo(estadoRaiz, null, null);
   raiz.sinExpandir = movimientosLegalesRapidos(estadoRaiz);
   const mejorRef = { jugada: raiz.sinExpandir[0] };

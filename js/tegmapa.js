@@ -348,6 +348,17 @@ class TegMapa {
     ctx.strokeStyle = "#9fe6f4";
     ctx.lineWidth = W * 0.0014;
     ctx.stroke(costa);
+
+    // "espuma": una línea blanca finita pegada al borde mismo, adentro de
+    // todo lo demás — la marca de la ola rompiendo contra la costa, como
+    // en la foto de la mesa con espuma blanca en la orilla. Sutil (alpha
+    // bajo, casi sin blur) para que se lea como un detalle, no un borde
+    // grueso tapando el mapa.
+    ctx.filter = `blur(${W * 0.0006}px)`;
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = "#eef8fb";
+    ctx.lineWidth = W * 0.0007;
+    ctx.stroke(costa);
     ctx.filter = "none";
 
     // capa 5 — partículas en suspensión, apenas visibles.

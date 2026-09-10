@@ -15,27 +15,62 @@ const PALETA_TABLEROS_AJEDREZ = {
 };
 
 // ---------------- material de pieza, por color (cacheado) ----------------
+// Devuelve siempre { cuerpo, trim }: para la mayoría de los colores `trim`
+// es el mismo material que `cuerpo` (un solo tono, como siempre), pero para
+// "Cristal" (vidrio de verdad, transmission) y "Negro/Blanco y Oro" (cuerpo
+// marmolado + herrajes de un material dorado aparte) son dos materiales
+// distintos — cada _crear*() de acá abajo pinta con uno u otro según la
+// parte (ver el comentario "geometría de piezas").
+let _matOroTrim = null;
+function materialOroTrim() {
+  if (_matOroTrim) return _matOroTrim;
+  _matOroTrim = new THREE.MeshPhysicalMaterial({
+    color: 0xd9a94a, roughness: 0.18, metalness: 0.9,
+    clearcoat: 0.6, clearcoatRoughness: 0.1,
+    emissive: 0x7a5420, emissiveIntensity: 0.12,
+  });
+  return _matOroTrim;
+}
 const _cacheMatPiezas = {};
 function materialPiezaAjedrez(colorId) {
   if (_cacheMatPiezas[colorId]) return _cacheMatPiezas[colorId];
   const cfg = PALETA_PIEDRAS[colorId] || PALETA_PIEDRAS.blanco;
-  const N = 256;
-  const cv = document.createElement("canvas");
-  cv.width = cv.height = N;
-  dibujarMarmol(cv.getContext("2d"), N, cfg);
-  const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.MeshPhysicalMaterial({
-    map: tex, roughness: cfg.rough, metalness: cfg.metal,
-    clearcoat: cfg.metal > 0.4 ? 0.45 : 1, clearcoatRoughness: 0.14, reflectivity: 0.55,
-    // brillo propio muy leve, con el tono claro de la propia veta (no el
-    // color base): así una pieza negra también recibe un poquito de luz
-    // propia, útil sobre todo en el tablero "Clásico B/N" donde una pieza
-    // negra sobre casilla negra casi no se distinguía del fondo.
-    emissive: new THREE.Color(cfg.veta1), emissiveIntensity: 0.14,
-  });
-  _cacheMatPiezas[colorId] = mat;
-  return mat;
+  let cuerpo;
+  if (cfg.vidrio) {
+    // vidrio de verdad (misma receta validada que las fichas de TEG): el
+    // color rico va en `color` directamente — en esta escena (sin HDRI de
+    // entorno real, sólo el reflejo cúbico propio) el par
+    // attenuationColor/attenuationDistance de three.js no se nota casi
+    // nada a esta escala de pieza, así que lo que de verdad lee como
+    // "vidrio de color" es transmission + clearcoat + el reflejo del
+    // entorno (envMap, agregado más abajo en actualizar()), no la
+    // absorción física.
+    cuerpo = new THREE.MeshPhysicalMaterial({
+      color: cfg.colorVidrio, roughness: 0.05, transmission: 0.72, thickness: 0.4,
+      ior: 1.9, attenuationColor: cfg.colorVidrio, attenuationDistance: 0.5,
+      clearcoat: 1, clearcoatRoughness: 0.04,
+      emissive: cfg.colorVidrio, emissiveIntensity: 0.12,
+    });
+  } else {
+    const N = 256;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = N;
+    dibujarMarmol(cv.getContext("2d"), N, cfg);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    cuerpo = new THREE.MeshPhysicalMaterial({
+      map: tex, roughness: cfg.rough, metalness: cfg.metal,
+      clearcoat: cfg.metal > 0.4 ? 0.45 : 1, clearcoatRoughness: 0.14, reflectivity: 0.55,
+      // brillo propio muy leve, con el tono claro de la propia veta (no el
+      // color base): así una pieza negra también recibe un poquito de luz
+      // propia, útil sobre todo en el tablero "Clásico B/N" donde una pieza
+      // negra sobre casilla negra casi no se distinguía del fondo.
+      emissive: new THREE.Color(cfg.veta1), emissiveIntensity: 0.14,
+    });
+  }
+  const par = { cuerpo, trim: cfg.trimOro ? materialOroTrim() : cuerpo };
+  _cacheMatPiezas[colorId] = par;
+  return par;
 }
 
 // ---------------- aura/destello sutil bajo cada pieza ----------------
@@ -74,28 +109,30 @@ function _malla(geo, mat) {
   return m;
 }
 
-function _crearPeon(mat) {
+function _crearPeon(mats) {
+  const cuerpoMat = mats.cuerpo, trim = mats.trim;
   const g = new THREE.Group();
-  const base = _malla(new THREE.CylinderGeometry(0.30, 0.34, 0.07, 24), mat); base.position.y = 0.035; g.add(base);
-  const cuerpo = _malla(new THREE.CylinderGeometry(0.13, 0.22, 0.28, 20), mat); cuerpo.position.y = 0.07 + 0.14; g.add(cuerpo);
-  const collar = _malla(new THREE.CylinderGeometry(0.18, 0.16, 0.05, 20), mat); collar.position.y = 0.07 + 0.28 + 0.025; g.add(collar);
-  const cabeza = _malla(new THREE.SphereGeometry(0.16, 18, 14), mat); cabeza.position.y = 0.07 + 0.28 + 0.05 + 0.15; g.add(cabeza);
+  const base = _malla(new THREE.CylinderGeometry(0.30, 0.34, 0.07, 24), trim); base.position.y = 0.035; g.add(base);
+  const cuerpo = _malla(new THREE.CylinderGeometry(0.13, 0.22, 0.28, 20), cuerpoMat); cuerpo.position.y = 0.07 + 0.14; g.add(cuerpo);
+  const collar = _malla(new THREE.CylinderGeometry(0.18, 0.16, 0.05, 20), trim); collar.position.y = 0.07 + 0.28 + 0.025; g.add(collar);
+  const cabeza = _malla(new THREE.SphereGeometry(0.16, 18, 14), cuerpoMat); cabeza.position.y = 0.07 + 0.28 + 0.05 + 0.15; g.add(cabeza);
   g.userData.altura = 0.07 + 0.28 + 0.05 + 0.30;
   return g;
 }
 
-function _crearTorre(mat) {
+function _crearTorre(mats) {
+  const cuerpoMat = mats.cuerpo, trim = mats.trim;
   const g = new THREE.Group();
-  const base = _malla(new THREE.CylinderGeometry(0.34, 0.38, 0.08, 24), mat); base.position.y = 0.04; g.add(base);
-  const cuerpo = _malla(new THREE.CylinderGeometry(0.28, 0.30, 0.42, 24), mat); cuerpo.position.y = 0.08 + 0.21; g.add(cuerpo);
-  const remate = _malla(new THREE.CylinderGeometry(0.33, 0.29, 0.07, 24), mat); remate.position.y = 0.08 + 0.42 + 0.035; g.add(remate);
+  const base = _malla(new THREE.CylinderGeometry(0.34, 0.38, 0.08, 24), trim); base.position.y = 0.04; g.add(base);
+  const cuerpo = _malla(new THREE.CylinderGeometry(0.28, 0.30, 0.42, 24), cuerpoMat); cuerpo.position.y = 0.08 + 0.21; g.add(cuerpo);
+  const remate = _malla(new THREE.CylinderGeometry(0.33, 0.29, 0.07, 24), trim); remate.position.y = 0.08 + 0.42 + 0.035; g.add(remate);
   // almenas: anillo de pequeños bloques arriba, como una torreta de castillo.
   const yAlmena = 0.08 + 0.42 + 0.07 + 0.05;
   const n = 8;
   for (let i = 0; i < n; i++) {
     if (i % 2 === 0) continue; // huecos alternados, silueta de almena real
     const ang = (i / n) * Math.PI * 2;
-    const bloque = _malla(new THREE.BoxGeometry(0.12, 0.1, 0.09), mat);
+    const bloque = _malla(new THREE.BoxGeometry(0.12, 0.1, 0.09), trim);
     bloque.position.set(Math.cos(ang) * 0.28, yAlmena, Math.sin(ang) * 0.28);
     bloque.rotation.y = -ang;
     g.add(bloque);
@@ -104,80 +141,84 @@ function _crearTorre(mat) {
   return g;
 }
 
-function _crearAlfil(mat) {
+function _crearAlfil(mats) {
+  const cuerpoMat = mats.cuerpo, trim = mats.trim;
   const g = new THREE.Group();
-  const base = _malla(new THREE.CylinderGeometry(0.32, 0.36, 0.08, 24), mat); base.position.y = 0.04; g.add(base);
-  const cuerpo = _malla(new THREE.CylinderGeometry(0.09, 0.26, 0.52, 22), mat); cuerpo.position.y = 0.08 + 0.26; g.add(cuerpo);
-  const collar = _malla(new THREE.CylinderGeometry(0.15, 0.12, 0.04, 20), mat); collar.position.y = 0.08 + 0.52 + 0.02; g.add(collar);
-  const cabeza = _malla(new THREE.SphereGeometry(0.135, 18, 14), mat); cabeza.position.y = 0.08 + 0.52 + 0.04 + 0.12; g.add(cabeza);
-  const punta = _malla(new THREE.ConeGeometry(0.035, 0.09, 12), mat); punta.position.y = 0.08 + 0.52 + 0.04 + 0.24 + 0.045; g.add(punta);
+  const base = _malla(new THREE.CylinderGeometry(0.32, 0.36, 0.08, 24), trim); base.position.y = 0.04; g.add(base);
+  const cuerpo = _malla(new THREE.CylinderGeometry(0.09, 0.26, 0.52, 22), cuerpoMat); cuerpo.position.y = 0.08 + 0.26; g.add(cuerpo);
+  const collar = _malla(new THREE.CylinderGeometry(0.15, 0.12, 0.04, 20), trim); collar.position.y = 0.08 + 0.52 + 0.02; g.add(collar);
+  const cabeza = _malla(new THREE.SphereGeometry(0.135, 18, 14), cuerpoMat); cabeza.position.y = 0.08 + 0.52 + 0.04 + 0.12; g.add(cabeza);
+  const punta = _malla(new THREE.ConeGeometry(0.035, 0.09, 12), trim); punta.position.y = 0.08 + 0.52 + 0.04 + 0.24 + 0.045; g.add(punta);
   g.userData.altura = 0.08 + 0.52 + 0.04 + 0.24 + 0.09;
   return g;
 }
 
-function _crearCaballo(mat) {
+function _crearCaballo(mats) {
   // Estilizado y abstracto (no un caballo tallado realista): base + cuello
   // curvo sugerido con dos bloques angulados + "cabeza" en cuña con orejas,
   // suficiente para distinguirse claramente del resto del set a simple vista.
+  const cuerpoMat = mats.cuerpo, trim = mats.trim;
   const g = new THREE.Group();
-  const base = _malla(new THREE.CylinderGeometry(0.33, 0.37, 0.08, 24), mat); base.position.y = 0.04; g.add(base);
-  const zocalo = _malla(new THREE.CylinderGeometry(0.22, 0.26, 0.16, 20), mat); zocalo.position.y = 0.08 + 0.08; g.add(zocalo);
+  const base = _malla(new THREE.CylinderGeometry(0.33, 0.37, 0.08, 24), trim); base.position.y = 0.04; g.add(base);
+  const zocalo = _malla(new THREE.CylinderGeometry(0.22, 0.26, 0.16, 20), cuerpoMat); zocalo.position.y = 0.08 + 0.08; g.add(zocalo);
 
-  const cuello = _malla(new THREE.BoxGeometry(0.20, 0.4, 0.16), mat);
+  const cuello = _malla(new THREE.BoxGeometry(0.20, 0.4, 0.16), cuerpoMat);
   cuello.position.set(0, 0.08 + 0.16 + 0.19, -0.02);
   cuello.rotation.x = -0.34;
   g.add(cuello);
 
-  const testuz = _malla(new THREE.BoxGeometry(0.19, 0.24, 0.30), mat);
+  const testuz = _malla(new THREE.BoxGeometry(0.19, 0.24, 0.30), cuerpoMat);
   testuz.position.set(0, 0.08 + 0.16 + 0.4 + 0.05, 0.14);
   testuz.rotation.x = 0.42;
   g.add(testuz);
 
-  const hocico = _malla(new THREE.BoxGeometry(0.14, 0.13, 0.2), mat);
+  const hocico = _malla(new THREE.BoxGeometry(0.14, 0.13, 0.2), cuerpoMat);
   hocico.position.set(0, 0.08 + 0.16 + 0.4 - 0.02, 0.30);
   hocico.rotation.x = 0.42;
   g.add(hocico);
 
-  const oreja1 = _malla(new THREE.ConeGeometry(0.045, 0.14, 10), mat);
+  const oreja1 = _malla(new THREE.ConeGeometry(0.045, 0.14, 10), cuerpoMat);
   oreja1.position.set(-0.08, 0.08 + 0.16 + 0.4 + 0.22, 0.02);
   oreja1.rotation.z = 0.18;
   g.add(oreja1);
-  const oreja2 = oreja1.clone(); oreja2.material = mat; oreja2.position.x = 0.08; oreja2.rotation.z = -0.18; g.add(oreja2);
+  const oreja2 = oreja1.clone(); oreja2.material = cuerpoMat; oreja2.position.x = 0.08; oreja2.rotation.z = -0.18; g.add(oreja2);
 
   g.userData.altura = 0.08 + 0.16 + 0.4 + 0.30;
   return g;
 }
 
-function _crearReina(mat) {
+function _crearReina(mats) {
+  const cuerpoMat = mats.cuerpo, trim = mats.trim;
   const g = new THREE.Group();
-  const base = _malla(new THREE.CylinderGeometry(0.36, 0.40, 0.09, 24), mat); base.position.y = 0.045; g.add(base);
-  const cuerpo = _malla(new THREE.CylinderGeometry(0.14, 0.30, 0.62, 24), mat); cuerpo.position.y = 0.09 + 0.31; g.add(cuerpo);
-  const collar = _malla(new THREE.TorusGeometry(0.19, 0.028, 10, 24), mat); collar.position.y = 0.09 + 0.62 + 0.02; collar.rotation.x = Math.PI / 2; g.add(collar);
-  const corona = _malla(new THREE.CylinderGeometry(0.20, 0.17, 0.10, 20, 1, true), mat); corona.position.y = 0.09 + 0.62 + 0.02 + 0.05; g.add(corona);
+  const base = _malla(new THREE.CylinderGeometry(0.36, 0.40, 0.09, 24), trim); base.position.y = 0.045; g.add(base);
+  const cuerpo = _malla(new THREE.CylinderGeometry(0.14, 0.30, 0.62, 24), cuerpoMat); cuerpo.position.y = 0.09 + 0.31; g.add(cuerpo);
+  const collar = _malla(new THREE.TorusGeometry(0.19, 0.028, 10, 24), trim); collar.position.y = 0.09 + 0.62 + 0.02; collar.rotation.x = Math.PI / 2; g.add(collar);
+  const corona = _malla(new THREE.CylinderGeometry(0.20, 0.17, 0.10, 20, 1, true), trim); corona.position.y = 0.09 + 0.62 + 0.02 + 0.05; g.add(corona);
   // puntas de la corona: pequeñas esferas en anillo, en vez de picos rectos.
   const yPuntas = 0.09 + 0.62 + 0.02 + 0.10;
   const n = 6;
   for (let i = 0; i < n; i++) {
     const ang = (i / n) * Math.PI * 2;
-    const punta = _malla(new THREE.SphereGeometry(0.035, 10, 8), mat);
+    const punta = _malla(new THREE.SphereGeometry(0.035, 10, 8), trim);
     punta.position.set(Math.cos(ang) * 0.185, yPuntas, Math.sin(ang) * 0.185);
     g.add(punta);
   }
-  const remate = _malla(new THREE.SphereGeometry(0.075, 16, 12), mat); remate.position.y = yPuntas + 0.06; g.add(remate);
+  const remate = _malla(new THREE.SphereGeometry(0.075, 16, 12), trim); remate.position.y = yPuntas + 0.06; g.add(remate);
   g.userData.altura = yPuntas + 0.12;
   return g;
 }
 
-function _crearRey(mat) {
+function _crearRey(mats) {
+  const cuerpoMat = mats.cuerpo, trim = mats.trim;
   const g = new THREE.Group();
-  const base = _malla(new THREE.CylinderGeometry(0.37, 0.41, 0.09, 24), mat); base.position.y = 0.045; g.add(base);
-  const cuerpo = _malla(new THREE.CylinderGeometry(0.15, 0.31, 0.68, 24), mat); cuerpo.position.y = 0.09 + 0.34; g.add(cuerpo);
-  const collar = _malla(new THREE.TorusGeometry(0.20, 0.03, 10, 24), mat); collar.position.y = 0.09 + 0.68 + 0.02; collar.rotation.x = Math.PI / 2; g.add(collar);
-  const corona = _malla(new THREE.CylinderGeometry(0.21, 0.18, 0.12, 20, 1, true), mat); corona.position.y = 0.09 + 0.68 + 0.02 + 0.06; g.add(corona);
+  const base = _malla(new THREE.CylinderGeometry(0.37, 0.41, 0.09, 24), trim); base.position.y = 0.045; g.add(base);
+  const cuerpo = _malla(new THREE.CylinderGeometry(0.15, 0.31, 0.68, 24), cuerpoMat); cuerpo.position.y = 0.09 + 0.34; g.add(cuerpo);
+  const collar = _malla(new THREE.TorusGeometry(0.20, 0.03, 10, 24), trim); collar.position.y = 0.09 + 0.68 + 0.02; collar.rotation.x = Math.PI / 2; g.add(collar);
+  const corona = _malla(new THREE.CylinderGeometry(0.21, 0.18, 0.12, 20, 1, true), trim); corona.position.y = 0.09 + 0.68 + 0.02 + 0.06; g.add(corona);
   const yCruz = 0.09 + 0.68 + 0.02 + 0.12 + 0.04;
-  const bulboCruz = _malla(new THREE.SphereGeometry(0.075, 16, 12), mat); bulboCruz.position.y = yCruz; g.add(bulboCruz);
-  const cruzV = _malla(new THREE.BoxGeometry(0.045, 0.20, 0.045), mat); cruzV.position.y = yCruz + 0.13; g.add(cruzV);
-  const cruzH = _malla(new THREE.BoxGeometry(0.14, 0.045, 0.045), mat); cruzH.position.y = yCruz + 0.10; g.add(cruzH);
+  const bulboCruz = _malla(new THREE.SphereGeometry(0.075, 16, 12), trim); bulboCruz.position.y = yCruz; g.add(bulboCruz);
+  const cruzV = _malla(new THREE.BoxGeometry(0.045, 0.20, 0.045), trim); cruzV.position.y = yCruz + 0.13; g.add(cruzV);
+  const cruzH = _malla(new THREE.BoxGeometry(0.14, 0.045, 0.045), trim); cruzH.position.y = yCruz + 0.10; g.add(cruzH);
   g.userData.altura = yCruz + 0.23;
   return g;
 }
@@ -606,7 +647,14 @@ class ChessTablero3D {
         const constructor = CONSTRUCTORES_PIEZA[p.tipo];
         if (!constructor) continue;
         const colorId = p.color === "blanco" ? colorBlanco : colorNegro;
-        const grupo = constructor(materialPiezaAjedrez(colorId));
+        const mats = materialPiezaAjedrez(colorId);
+        // mismo reflejo cúbico que ya usa el tablero (ver _rtCubo): sin esto,
+        // las piezas de cristal (transmission) y las de herraje dorado
+        // (metalness alto) no tienen nada para reflejar/refractar más que
+        // las luces directas, y se ven planas en vez de brillar de verdad.
+        if (!mats.cuerpo.envMap) { mats.cuerpo.envMap = this._rtCubo.texture; mats.cuerpo.envMapIntensity = mats.cuerpo.transmission ? 0.9 : 0.55; mats.cuerpo.needsUpdate = true; }
+        if (mats.trim !== mats.cuerpo && !mats.trim.envMap) { mats.trim.envMap = this._rtCubo.texture; mats.trim.envMapIntensity = 1.1; mats.trim.needsUpdate = true; }
+        const grupo = constructor(mats);
         const halo = new THREE.Sprite(materialAuraPieza());
         halo.scale.set(0.8, 0.8, 1);
         halo.position.set(0, 0.03, 0);

@@ -20,6 +20,20 @@ const PALETA_PIEDRAS = {
   violeta: { nombre: "Violeta", base: "#4a2a5c", veta1: "#b48ad1", veta2: "#200f2a", metal: 0.04, rough: 0.3 },
   dorado:  { nombre: "Dorado",  base: "#a97f3c", veta1: "#f0d9a0", veta2: "#5c431f", metal: 0.65, rough: 0.28 },
   plata:   { nombre: "Plata",   base: "#9aa0a6", veta1: "#eef0f2", veta2: "#4a4e52", metal: 0.7, rough: 0.24 },
+  // Cristal ámbar/azul: piedra de vidrio de verdad (transmission), no una
+  // textura opaca — ver el flag `vidrio` en _materialPiedra()/
+  // materialPiezaAjedrez() en board3d.js/chess3d.js. base/veta1/veta2 acá
+  // sólo se usan para la vista previa chica del swatch (dibujarMarmol),
+  // la pieza/piedra real en 3D usa `colorVidrio`.
+  cristalAmbar: { nombre: "Cristal Ámbar", base: "#4a2e10", veta1: "#ffb35c", veta2: "#7a4010", metal: 0.05, rough: 0.05, vidrio: true, colorVidrio: "#e8963a" },
+  cristalAzul:  { nombre: "Cristal Azul",  base: "#0e2a4a", veta1: "#6cc4ff", veta2: "#123a6b", metal: 0.05, rough: 0.05, vidrio: true, colorVidrio: "#2f8fe0" },
+  // Negro/Blanco y Oro: sólo tiene el efecto de dos tonos (cuerpo + herrajes
+  // dorados) en las piezas de ajedrez, que sí tienen partes separadas para
+  // pintar distinto (ver `trimOro` en materialPiezaAjedrez, chess3d.js). En
+  // las piedras de Go (una esfera sola, sin partes) cae de vuelta a un
+  // negro/blanco con un toque cálido de más, sin herraje separado posible.
+  negroOro: { nombre: "Negro y Oro",   base: "#0c0a08", veta1: "#5a4420", veta2: "#050403", metal: 0.35, rough: 0.22, trimOro: true },
+  blancoOro: { nombre: "Blanco y Oro", base: "#f3ecd9", veta1: "#e4d8ba", veta2: "#c2a565", metal: 0.15, rough: 0.26, trimOro: true },
 };
 
 // ---------------- paleta de tableros ----------------
@@ -385,16 +399,28 @@ class Tablero3D {
     this._cacheMateriales = this._cacheMateriales || {};
     if (this._cacheMateriales[id]) return this._cacheMateriales[id];
     const cfg = PALETA_PIEDRAS[id] || PALETA_PIEDRAS.negro;
-    const N = 256;
-    const cv = document.createElement("canvas");
-    cv.width = cv.height = N;
-    dibujarMarmol(cv.getContext("2d"), N, cfg);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const mat = new THREE.MeshPhysicalMaterial({
-      map: tex, roughness: cfg.rough, metalness: cfg.metal,
-      clearcoat: cfg.metal > 0.4 ? 0.45 : 1, clearcoatRoughness: 0.14, reflectivity: 0.55,
-    });
+    let mat;
+    if (cfg.vidrio) {
+      // piedra de vidrio de verdad (misma receta que las piezas de ajedrez
+      // y las fichas de TEG): transmission en vez de una textura opaca.
+      mat = new THREE.MeshPhysicalMaterial({
+        color: cfg.colorVidrio, roughness: 0.06, transmission: 0.7, thickness: 0.35,
+        ior: 1.9, attenuationColor: cfg.colorVidrio, attenuationDistance: 0.5,
+        clearcoat: 1, clearcoatRoughness: 0.05,
+        emissive: cfg.colorVidrio, emissiveIntensity: 0.12,
+      });
+    } else {
+      const N = 256;
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = N;
+      dibujarMarmol(cv.getContext("2d"), N, cfg);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      mat = new THREE.MeshPhysicalMaterial({
+        map: tex, roughness: cfg.rough, metalness: cfg.metal,
+        clearcoat: cfg.metal > 0.4 ? 0.45 : 1, clearcoatRoughness: 0.14, reflectivity: 0.55,
+      });
+    }
     this._cacheMateriales[id] = mat;
     return mat;
   }

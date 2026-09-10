@@ -254,18 +254,23 @@
       <div class="tablero-cabecera">
         <div class="tablero-titulo">
           <button class="btn-volver" id="btn-volver-ajedrez2">← Juegos</button>
-          <span class="turno-indicador"><span id="ajedrez2-texto">Vidriera — todavía sin reglas</span></span>
+          <span class="turno-indicador" id="turno-indicador-ajedrez2">
+            <span class="turno-piedra" id="turno-piedra-ajedrez2"></span>
+            <span id="turno-texto-ajedrez2">Blancas juegan</span>
+          </span>
         </div>
         <div class="acciones-tablero">
           <div class="segmentado" id="seg-tablero-ajedrez2">
             <button class="activo" data-tablero="rojoNegro">Rojo y Negro</button>
             <button data-tablero="blancoAzul">Blanco y Azul</button>
           </div>
+          <button class="btn-accion rojo" id="btn-rendirse-ajedrez2">Rendirse</button>
+          <button class="btn-accion" id="btn-nueva-ajedrez2">Nueva partida</button>
           <button class="btn-accion" id="btn-pantalla-completa-ajedrez2">⛶ Pantalla completa</button>
         </div>
       </div>
 
-      <p class="teg-ayuda">Arrastrá para girar la cámara, rueda del mouse para acercar. Hacé clic en una pieza para inspeccionarla en 360°.</p>
+      <p class="teg-ayuda">Hacé clic en tu pieza para seleccionarla (se abre su ficha 360° acá al lado) y después en la casilla de destino para moverla. Arrastrá para girar la cámara, rueda del mouse para acercar.</p>
 
       <div class="teg-tablero-fila">
         <div class="tablero-envoltorio">
@@ -279,6 +284,12 @@
           <div class="ajedrez2-inspector-canvas" id="ajedrez2-inspector-canvas"></div>
           <p class="campo-nota" style="margin-top:10px;">Arrastrá para girar 360°, rueda del mouse para acercar.</p>
         </aside>
+      </div>
+
+      <div class="panel-lateral">
+        <div class="info-chip"><div class="num" id="cap-blancas-ajedrez2">0</div><div class="etq">Capturas blancas</div></div>
+        <div class="info-chip"><div class="num" id="cap-negras-ajedrez2">0</div><div class="etq">Capturas negras</div></div>
+        <div class="info-chip"><div class="num" id="mov-chip-ajedrez2">0</div><div class="etq">Jugadas</div></div>
       </div>
     </section>
 
@@ -505,6 +516,54 @@
   </div>
   <audio id="musica-ajedrez"></audio>
 
+  <!-- ---------------- modal: configurar partida de Ajedrez 2.0 ---------------- -->
+  <div class="modal-fondo" id="modal-ajedrez2">
+    <div class="modal">
+      <button class="modal-cerrar" id="modal-ajedrez2-cerrar">✕</button>
+
+      <h2 class="modal-titulo serif" style="margin-top:6px;">Ajedrez 2.0</h2>
+      <p class="modal-sub">Mismas reglas de siempre — esta vez con personajes 3D reales en vez de fichas.</p>
+
+      <div id="form-ajedrez2">
+        <div class="campo-fila" style="margin-top:14px;">
+          <div class="segmentado" id="seg-rival-ajedrez2">
+            <button class="activo" data-rival="bot">vs Bot</button>
+            <button data-rival="libre">Free play</button>
+          </div>
+        </div>
+
+        <div id="bloque-nivel-ajedrez2">
+          <div class="nivel-linea">✓ <span id="nivel-texto-ajedrez2">Nivel 1 · ~30 kyu</span> <span class="nivel-badge">🧠 piensa en serio</span></div>
+          <div class="slider-envoltorio">
+            <input type="range" id="slider-nivel-ajedrez2" min="1" max="9" value="1" step="1">
+            <div class="slider-etiquetas"><span>30 kyu</span><span>más fuerte, tarda un poco más</span><span>MAX</span></div>
+          </div>
+        </div>
+
+        <hr class="separador">
+
+        <div class="campo-fila">
+          <div class="campo-label">Tu color</div>
+          <div class="segmentado" id="seg-color-ajedrez2">
+            <button data-color="nigiri">Sorteo</button>
+            <button class="activo" data-color="blanco"><span class="punto-color blanco"></span> Blancas</button>
+            <button data-color="negro"><span class="punto-color negro"></span> Negras</button>
+          </div>
+        </div>
+
+        <div class="campo-fila">
+          <div>
+            <div class="campo-label">El bot nunca se rinde</div>
+            <div class="campo-nota">Toda partida termina en jaque mate, ahogado o tablas</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="toggle-noresign-ajedrez2"><span class="via"></span></label>
+        </div>
+
+        <button class="btn-jugar" id="btn-jugar-ajedrez2">Jugar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ---------------- modal: configurar partida de Damas ---------------- -->
   <div class="modal-fondo" id="modal-damas">
     <div class="modal">
@@ -716,7 +775,7 @@
   <script src="js/personajes/caballoBlanco.js?v=1"></script>
   <script src="js/personajes/peonBlanco.js?v=1"></script>
   <script src="js/personajes/caballoNegro.js?v=1"></script>
-  <script src="js/ajedrez2_3d.js?v=6"></script>
-  <script src="js/app.js?v=33"></script>
+  <script src="js/ajedrez2_3d.js?v=7"></script>
+  <script src="js/app.js?v=34"></script>
 </body>
 </html>

@@ -44,7 +44,7 @@ $$(".tarjeta-juego").forEach((tarjeta) => {
     else if (juego === "ajedrez") abrirModalAjedrez();
     else if (juego === "teg") abrirModalTeg();
     else if (juego === "damas") abrirModalDamas();
-    else if (juego === "ajedrez2") abrirAjedrez2();
+    else if (juego === "ajedrez2") abrirModalAjedrez2();
     else abrirModalPronto(juego);
   });
 });
@@ -232,6 +232,10 @@ $("#resultado-volver").addEventListener("click", () => {
   } else if (juegoActivo === "damas") {
     $("#vista-tablero-damas").classList.add("oculto");
     partidaDamas = null;
+  } else if (juegoActivo === "ajedrez2") {
+    $("#vista-ajedrez2").classList.add("oculto");
+    partidaAjedrez2 = null;
+    cerrarInspectorAjedrez2();
   } else {
     $("#vista-tablero").classList.add("oculto");
     partida = null;
@@ -244,6 +248,7 @@ $("#resultado-nueva").addEventListener("click", () => {
   if (juegoActivo === "ajedrez") abrirModalAjedrez();
   else if (juegoActivo === "teg") abrirModalTeg();
   else if (juegoActivo === "damas") abrirModalDamas();
+  else if (juegoActivo === "ajedrez2") abrirModalAjedrez2();
   else abrirModalGo();
 });
 $("#modal-resultado-cerrar").addEventListener("click", () => $("#modal-resultado").classList.remove("abierto"));
@@ -1814,15 +1819,14 @@ function sonidoConquistaTeg() {
 }
 
 // ================================================================
-// "AJEDREZ 2.0" — vidriera de personajes 3D (ver js/ajedrez2_3d.js)
+// "AJEDREZ 2.0" — ajedrez jugable con personajes 3D (ver js/ajedrez2_3d.js)
 // ================================================================
-// Todavía no tiene motor de reglas — es la vista previa para validar el
-// arte personaje por personaje antes de construir el juego jugable de
-// verdad (acordado explícitamente con el usuario). Arma un tablero lleno
-// de instancias del único personaje ya procesado (medievalKnight, ver
-// js/personajes/medievalKnight.js y scripts/procesar_personaje.py) como
-// "ejército" de las dos filas de atrás, sólo para ver cómo se ve un
-// tablero lleno de verdad.
+// Se DUPLICA acá toda la capa de interacción del Ajedrez original (más
+// abajo, sección "AJEDREZ") en vez de reutilizarla — pedido explícito del
+// usuario ("no migrar sino duplicar") — pero el motor de reglas de
+// verdad (class Ajedrez, jugadaDelAjedrez, botDeberiaRendirseAjedrez, todo
+// en js/chess.js) sí es el mismo: es el tablero original el que no se
+// toca ni se comparte estado con esto, no las reglas del ajedrez en sí.
 let tablero3dAjedrez2 = null;
 let inspectorAjedrez2 = null;
 let tableroAjedrez2Activo = "rojoNegro";
@@ -1840,57 +1844,121 @@ const NOMBRE_ROL_AJEDREZ2 = { rey: "Rey", reina: "Reina", torre: "Torre", alfil:
 // otra y mirando cuál queda de frente a la cámara en vez de de costado.
 const GIRO_EXTRA_PERSONAJE = { reinaBlanca: 180, alfilNegro: 180, peonBlanco: 90 };
 
-// Roster completo de blancas (los 6 roles ya asignados) y de negras salvo
-// los caballos, todavía sin declarar por el usuario — esas dos casillas
-// (b8/g8) quedan vacías en vez de rellenas con un placeholder, para no
-// confundir "esto ya está decidido" con "esto todavía no".
-function formacionVidrieraAjedrez2() {
+// tipo de pieza de js/chess.js (P/N/B/R/Q/K) + color → { id del personaje
+// (ver js/personajes/*.js), rol (para el alto y el nombre en el inspector) }.
+const PERSONAJE_POR_PIEZA_AJEDREZ2 = {
+  P: { rol: "peon", blanco: "peonBlanco", negro: "peonNegro" },
+  N: { rol: "caballo", blanco: "caballoBlanco", negro: "caballoNegro" },
+  B: { rol: "alfil", blanco: "alfilBlanco", negro: "alfilNegro" },
+  R: { rol: "torre", blanco: "torreBlanca", negro: "torreNegra" },
+  Q: { rol: "reina", blanco: "reinaBlanca", negro: "reinaNegra" },
+  K: { rol: "rey", blanco: "reyBlanco", negro: "reyNegro" },
+};
+function personajeDePieza(pieza) {
+  const info = PERSONAJE_POR_PIEZA_AJEDREZ2[pieza.tipo];
+  const equipo = pieza.color === BLANCO ? "blanco" : "negro";
+  const id = info[equipo];
+  return { id, rol: info.rol, equipo, altura: ALTURA_ROL_AJEDREZ2[info.rol], giroExtra: GIRO_EXTRA_PERSONAJE[id] };
+}
+function formacionDesdeChessAjedrez2(partida) {
   const filas = [];
-  const fila = (y, equipo, cols) => {
-    cols.forEach(([x, rol, id]) => {
-      if (!id) return; // casilla sin personaje asignado todavía (caballos negros)
-      filas.push({ id, x, y, equipo, rol, altura: ALTURA_ROL_AJEDREZ2[rol], giroExtra: GIRO_EXTRA_PERSONAJE[id] });
-    });
-  };
-  fila(0, "blanco", [
-    [0, "torre", "torreBlanca"], [1, "caballo", "caballoBlanco"], [2, "alfil", "alfilBlanco"],
-    [3, "reina", "reinaBlanca"], [4, "rey", "reyBlanco"], [5, "alfil", "alfilBlanco"],
-    [6, "caballo", "caballoBlanco"], [7, "torre", "torreBlanca"],
-  ]);
-  for (let x = 0; x < 8; x++) filas.push({ id: "peonBlanco", x, y: 1, equipo: "blanco", rol: "peon", altura: ALTURA_ROL_AJEDREZ2.peon, giroExtra: GIRO_EXTRA_PERSONAJE.peonBlanco });
-
-  fila(7, "negro", [
-    [0, "torre", "torreNegra"], [1, "caballo", "caballoNegro"], [2, "alfil", "alfilNegro"],
-    [3, "reina", "reinaNegra"], [4, "rey", "reyNegro"], [5, "alfil", "alfilNegro"],
-    [6, "caballo", "caballoNegro"], [7, "torre", "torreNegra"],
-  ]);
-  for (let x = 0; x < 8; x++) filas.push({ id: "peonNegro", x, y: 6, equipo: "negro", rol: "peon", altura: ALTURA_ROL_AJEDREZ2.peon, giroExtra: GIRO_EXTRA_PERSONAJE.peonNegro });
-
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const p = partida.pieza(x, y);
+      if (!p) continue;
+      filas.push({ x, y, ...personajeDePieza(p) });
+    }
+  }
   return filas;
 }
+
+const formAjedrez2 = { rival: "bot", nivel: 1, color: "blanco", noresign: false };
+
+function abrirModalAjedrez2() { $("#modal-ajedrez2").classList.add("abierto"); }
+function cerrarModalAjedrez2() { $("#modal-ajedrez2").classList.remove("abierto"); }
+$("#modal-ajedrez2-cerrar").addEventListener("click", cerrarModalAjedrez2);
+$("#modal-ajedrez2").addEventListener("click", (e) => { if (e.target.id === "modal-ajedrez2") cerrarModalAjedrez2(); });
+
+$("#seg-rival-ajedrez2").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-rival]");
+  if (!btn) return;
+  formAjedrez2.rival = btn.dataset.rival;
+  $$("#seg-rival-ajedrez2 button").forEach((b) => b.classList.toggle("activo", b === btn));
+  $("#bloque-nivel-ajedrez2").classList.toggle("oculto", formAjedrez2.rival !== "bot");
+  actualizarToggleNoResignAjedrez2();
+});
+$("#slider-nivel-ajedrez2").addEventListener("input", (e) => {
+  formAjedrez2.nivel = Number(e.target.value);
+  $("#nivel-texto-ajedrez2").textContent = NIVELES[formAjedrez2.nivel - 1];
+  const pct = ((formAjedrez2.nivel - 1) / 8) * 100;
+  e.target.style.setProperty("--pct", pct + "%");
+});
+$("#seg-color-ajedrez2").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-color]");
+  if (!btn) return;
+  formAjedrez2.color = btn.dataset.color;
+  $$("#seg-color-ajedrez2 button").forEach((b) => b.classList.toggle("activo", b === btn));
+});
+$("#toggle-noresign-ajedrez2").addEventListener("change", (e) => { formAjedrez2.noresign = e.target.checked; });
+function actualizarToggleNoResignAjedrez2() {
+  const fila = $("#toggle-noresign-ajedrez2").closest(".campo-fila");
+  fila.classList.toggle("oculto", formAjedrez2.rival !== "bot");
+}
+
+// ---------------- partida ----------------
+let partidaAjedrez2 = null;
+let miColorAjedrez2 = BLANCO;
+let esFreePlayAjedrez2 = false;
+let noresignActivoAjedrez2 = false;
+let skillBotAjedrez2 = 0.6;
+let esperandoBotAjedrez2 = false;
+let seleccionAjedrez2 = null;
+let legalesAjedrez2 = [];
 
 function inicializarTablero3dAjedrez2() {
   if (tablero3dAjedrez2) return;
   tablero3dAjedrez2 = new Ajedrez2Tablero3D($("#tablero-ajedrez2-madera"));
-  tablero3dAjedrez2.onPiezaClick((info) => abrirInspectorAjedrez2(info));
+  tablero3dAjedrez2.onCasilla((x, y) => alClickCasillaAjedrez2(x, y));
 }
 
-function abrirAjedrez2() {
+$("#btn-jugar-ajedrez2").addEventListener("click", () => {
+  juegoActivo = "ajedrez2";
+  partidaAjedrez2 = new Ajedrez();
+
+  esFreePlayAjedrez2 = formAjedrez2.rival === "libre";
+  noresignActivoAjedrez2 = formAjedrez2.noresign;
+  skillBotAjedrez2 = (formAjedrez2.nivel - 1) / 8;
+  seleccionAjedrez2 = null;
+  legalesAjedrez2 = [];
+
+  if (formAjedrez2.color === "nigiri") miColorAjedrez2 = Math.random() < 0.5 ? BLANCO : NEGRO;
+  else miColorAjedrez2 = formAjedrez2.color === "blanco" ? BLANCO : NEGRO;
+
+  cerrarModalAjedrez2();
   $("#vista-juegos").classList.add("oculto");
   $("#vista-ajedrez2").classList.remove("oculto");
+  $("#modal-resultado").classList.remove("abierto");
   document.body.classList.remove("menu-fondo");
+  $("#btn-rendirse-ajedrez2").disabled = false;
+  cerrarInspectorAjedrez2();
+
   inicializarTablero3dAjedrez2();
   tablero3dAjedrez2.cambiarTablero(tableroAjedrez2Activo);
-  tablero3dAjedrez2.colocarPersonajes(formacionVidrieraAjedrez2());
+  dibujarTableroAjedrez2();
+  actualizarPanelAjedrez2();
   tablero3dAjedrez2.resize();
-}
+  turnoBotAjedrez2SiCorresponde();
+});
 
 $("#btn-volver-ajedrez2").addEventListener("click", () => {
   $("#vista-ajedrez2").classList.add("oculto");
   $("#vista-juegos").classList.remove("oculto");
+  $("#modal-resultado").classList.remove("abierto");
   document.body.classList.add("menu-fondo");
+  partidaAjedrez2 = null;
   cerrarInspectorAjedrez2();
 });
+$("#btn-nueva-ajedrez2").addEventListener("click", () => abrirModalAjedrez2());
 
 $("#seg-tablero-ajedrez2").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-tablero]");
@@ -1899,7 +1967,7 @@ $("#seg-tablero-ajedrez2").addEventListener("click", (e) => {
   $$("#seg-tablero-ajedrez2 button").forEach((b) => b.classList.toggle("activo", b === btn));
   if (tablero3dAjedrez2) {
     tablero3dAjedrez2.cambiarTablero(tableroAjedrez2Activo);
-    tablero3dAjedrez2.colocarPersonajes(formacionVidrieraAjedrez2());
+    if (partidaAjedrez2) dibujarTableroAjedrez2();
   }
 });
 
@@ -1911,6 +1979,183 @@ document.addEventListener("fullscreenchange", () => {
   if (tablero3dAjedrez2) setTimeout(() => tablero3dAjedrez2.resize(), 60);
   if (inspectorAjedrez2) setTimeout(() => inspectorAjedrez2.resize(), 60);
 });
+
+$("#btn-rendirse-ajedrez2").addEventListener("click", () => {
+  if (!partidaAjedrez2 || partidaAjedrez2.terminado) return;
+  if (!esFreePlayAjedrez2 && !esperandoBotAjedrez2) {
+    partidaAjedrez2.rendirse(miColorAjedrez2);
+  } else if (esFreePlayAjedrez2) {
+    partidaAjedrez2.rendirse(partidaAjedrez2.turno);
+  } else {
+    return; // no se puede rendir en medio del turno del bot
+  }
+  seleccionAjedrez2 = null; legalesAjedrez2 = [];
+  dibujarTableroAjedrez2();
+  actualizarPanelAjedrez2();
+});
+
+function esTurnoDelHumanoAjedrez2() {
+  if (esFreePlayAjedrez2) return true;
+  return partidaAjedrez2.turno === miColorAjedrez2;
+}
+
+function turnoBotAjedrez2SiCorresponde() {
+  if (!partidaAjedrez2 || partidaAjedrez2.terminado || esFreePlayAjedrez2) return;
+  if (partidaAjedrez2.turno === miColorAjedrez2) return;
+  esperandoBotAjedrez2 = true;
+  $("#btn-rendirse-ajedrez2").disabled = true;
+  actualizarPanelAjedrez2();
+  (async () => {
+    if (!partidaAjedrez2 || partidaAjedrez2.terminado) { esperandoBotAjedrez2 = false; return; }
+    const colorBot = partidaAjedrez2.turno;
+    if (!noresignActivoAjedrez2 && botDeberiaRendirseAjedrez(partidaAjedrez2, colorBot, skillBotAjedrez2)) {
+      partidaAjedrez2.rendirse(colorBot);
+      esperandoBotAjedrez2 = false;
+      $("#btn-rendirse-ajedrez2").disabled = false;
+      dibujarTableroAjedrez2();
+      actualizarPanelAjedrez2();
+      return;
+    }
+    const jugada = await conTechoDeTiempo(
+      jugadaDelAjedrez(partidaAjedrez2, colorBot, skillBotAjedrez2),
+      presupuestoPensadaMs(skillBotAjedrez2) + 2000,
+      () => jugadaDelAjedrez(partidaAjedrez2, colorBot, 0)
+    );
+    if (jugada) {
+      const r = partidaAjedrez2.mover(jugada.desde, jugada.hasta, "Q");
+      if (r.ok) sonidoFichaAjedrez(!!r.capturada);
+    }
+    esperandoBotAjedrez2 = false;
+    $("#btn-rendirse-ajedrez2").disabled = false;
+    dibujarTableroAjedrez2();
+    actualizarPanelAjedrez2();
+  })();
+}
+
+function alClickCasillaAjedrez2(x, y) {
+  if (!partidaAjedrez2 || partidaAjedrez2.terminado) return;
+  if (esperandoBotAjedrez2) return;
+  if (!esTurnoDelHumanoAjedrez2()) return;
+
+  const pieza = partidaAjedrez2.pieza(x, y);
+
+  if (seleccionAjedrez2) {
+    if (seleccionAjedrez2.x === x && seleccionAjedrez2.y === y) {
+      seleccionAjedrez2 = null; legalesAjedrez2 = [];
+      cerrarInspectorAjedrez2();
+      dibujarTableroAjedrez2();
+      return;
+    }
+    const destino = legalesAjedrez2.find((m) => m.hasta.x === x && m.hasta.y === y);
+    if (destino) {
+      const r = partidaAjedrez2.mover(seleccionAjedrez2, { x, y });
+      seleccionAjedrez2 = null; legalesAjedrez2 = [];
+      cerrarInspectorAjedrez2();
+      if (r.ok) {
+        sonidoFichaAjedrez(!!r.capturada);
+        dibujarTableroAjedrez2();
+        actualizarPanelAjedrez2();
+        turnoBotAjedrez2SiCorresponde();
+      } else {
+        dibujarTableroAjedrez2();
+      }
+      return;
+    }
+  }
+
+  if (pieza && pieza.color === partidaAjedrez2.turno) {
+    seleccionAjedrez2 = { x, y };
+    legalesAjedrez2 = partidaAjedrez2.movimientosLegales(x, y);
+    // Pedido explícito: "cuando le haga click a la ficha que quiero mover
+    // se abra un modal al costado que me muestre la ficha seleccionada y
+    // pueda inspeccionarla 360" — la selección para mover Y la inspección
+    // son el mismo clic, no dos acciones separadas.
+    abrirInspectorAjedrez2(personajeDePieza(pieza));
+  } else {
+    seleccionAjedrez2 = null; legalesAjedrez2 = [];
+    cerrarInspectorAjedrez2();
+  }
+  dibujarTableroAjedrez2();
+}
+
+function dibujarTableroAjedrez2() {
+  let jaqueCasilla = null;
+  if (!partidaAjedrez2.terminado && partidaAjedrez2.estaEnJaque(partidaAjedrez2.turno)) {
+    jaqueCasilla = partidaAjedrez2.encontrarRey(partidaAjedrez2.turno);
+  }
+  tablero3dAjedrez2.actualizar(formacionDesdeChessAjedrez2(partidaAjedrez2), {
+    seleccion: seleccionAjedrez2,
+    legales: legalesAjedrez2.map((m) => m.hasta),
+    ultimoMovimiento: partidaAjedrez2.ultimoMovimiento,
+    jaqueCasilla,
+  });
+}
+
+function actualizarPanelAjedrez2() {
+  const piedra = $("#turno-piedra-ajedrez2");
+  const texto = $("#turno-texto-ajedrez2");
+  if (partidaAjedrez2.terminado) {
+    texto.textContent = "Partida terminada";
+    piedra.style.background = "linear-gradient(135deg, var(--oro-claro), var(--oro-oscuro))";
+  } else {
+    const esBlanco = partidaAjedrez2.turno === BLANCO;
+    piedra.style.background = esBlanco
+      ? "radial-gradient(circle at 35% 30%, #ffffff, #d8cdb4)"
+      : "radial-gradient(circle at 35% 30%, #3a352c, #050403)";
+    const quien = esFreePlayAjedrez2
+      ? (esBlanco ? "Blancas juegan" : "Negras juegan")
+      : (partidaAjedrez2.turno === miColorAjedrez2 ? "Tu turno" : (esperandoBotAjedrez2 ? "El bot está pensando…" : "Turno del bot"));
+    texto.textContent = quien;
+  }
+  $("#cap-blancas-ajedrez2").textContent = partidaAjedrez2.capturas[BLANCO].length;
+  $("#cap-negras-ajedrez2").textContent = partidaAjedrez2.capturas[NEGRO].length;
+  $("#mov-chip-ajedrez2").textContent = partidaAjedrez2.movimientos;
+
+  if (partidaAjedrez2.terminado) {
+    $("#btn-rendirse-ajedrez2").disabled = true;
+    mostrarResultadoAjedrez2();
+  }
+}
+
+function mostrarResultadoAjedrez2() {
+  const r = partidaAjedrez2.resultado;
+  const nombreColor = (c) => (c === BLANCO ? "Blancas" : "Negras");
+  let titulo, detalle;
+
+  if (r.ganador === null) {
+    titulo = "Tablas";
+    const motivos = {
+      ahogado: "Ahogado — sin jugadas legales, sin estar en jaque.",
+      material_insuficiente: "Tablas por material insuficiente para dar mate.",
+      repeticion: "Tablas por repetición de posición.",
+    };
+    detalle = motivos[r.motivo] || "Partida en tablas.";
+  } else if (esFreePlayAjedrez2) {
+    titulo = `Ganan las ${nombreColor(r.ganador).toLowerCase()}`;
+    detalle = r.motivo === "jaqueMate" ? "Jaque mate." : "Partida ganada por renuncia del rival.";
+  } else {
+    titulo = r.ganador === miColorAjedrez2 ? "¡Ganaste!" : "Perdiste";
+    const motivoTxt = r.motivo === "jaqueMate"
+      ? "Jaque mate."
+      : (r.ganador === miColorAjedrez2 ? "El bot se rindió." : "Te rendiste.");
+    detalle = `${motivoTxt} · Jugaste con ${miColorAjedrez2 === BLANCO ? "blancas" : "negras"}`;
+  }
+
+  $("#mensaje-final-titulo").textContent = titulo;
+  $("#mensaje-final-detalle").textContent = detalle;
+  const piedraIcono = $("#resultado-piedra");
+  if (r.ganador === null) {
+    piedraIcono.style.background = "linear-gradient(135deg, var(--oro-claro), var(--oro-oscuro))";
+  } else {
+    piedraIcono.style.background = r.ganador === BLANCO
+      ? "radial-gradient(circle at 35% 28%, #ffffff, #eee4cf 60%, #c9bda0 100%)"
+      : "radial-gradient(circle at 35% 28%, #4a453a, #141210 55%, #000 100%)";
+  }
+  setTimeout(() => $("#modal-resultado").classList.add("abierto"), 260);
+}
+
+$("#slider-nivel-ajedrez2").style.setProperty("--pct", "0%");
+actualizarToggleNoResignAjedrez2();
 
 // ---------------- inspección 360° de una pieza (drawer lateral) ----------------
 const NOMBRE_PIEZA_AJEDREZ2 = {

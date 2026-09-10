@@ -1,14 +1,12 @@
-// ============ "Ajedrez 2.0" — sala de personajes en 3D ============
-// Todavía NO es un ajedrez jugable: es la vidriera para validar el arte
-// antes de meterle el motor de reglas — mismo criterio que ya se acordó
-// con el usuario (personaje por personaje, primero comprobar que se vea
-// bien parado en el tablero). Reutiliza la sala/pedestal/luz LED de
-// Go/Ajedrez/Damas (código copiado, mismo patrón que ya usan esos tres
-// archivos) y los tableros de mármol + oro que ya existen para Damas
-// (PALETA_TABLEROS_DAMAS, de damas3d.js — pedido explícito del usuario:
-// "reutiliza esos tableros"). Las piezas son los personajes 3D reales
-// (ver js/personajes/*.js + js/personajes_loader.mjs) en vez de geometría
-// procedural.
+// ============ "Ajedrez 2.0" — ajedrez jugable con personajes 3D ============
+// Motor de reglas real (js/chess.js, el mismo que usa el Ajedrez de
+// siempre — se DUPLICA la capa de interacción/UI en js/app.js, no se toca
+// ni se comparte estado con el ajedrez original, así los dos conviven).
+// Esta clase es sólo la vista: sala/pedestal/luz LED (mismo patrón que
+// Go/Ajedrez/Damas) y los tableros de mármol + oro de Damas
+// (PALETA_TABLEROS_DAMAS — pedido explícito: "reutiliza esos tableros").
+// Las piezas son los personajes 3D reales (ver js/personajes/*.js) en vez
+// de geometría procedural.
 class Ajedrez2Tablero3D {
   constructor(contenedor) {
     this.contenedor = contenedor;
@@ -28,9 +26,11 @@ class Ajedrez2Tablero3D {
     contenedor.appendChild(this.dom);
 
     this._grupoPiezas = new THREE.Group();
+    this._grupoMarcas = new THREE.Group();
     this._raycaster = new THREE.Raycaster();
     this._puntero = new THREE.Vector2();
-    this._onPiezaClick = null;
+    this._onCasilla = null;
+    this._planoClick = null;
 
     this._azimut = 0.08;
     this._elevacion = 0.78;
@@ -51,6 +51,7 @@ class Ajedrez2Tablero3D {
     this.escena.add(this._cuboCamara);
     this._crearTableroBase("rojoNegro");
     this.escena.add(this._grupoPiezas);
+    this.escena.add(this._grupoMarcas);
     this._eventos();
     this._loop = this._loop.bind(this);
     requestAnimationFrame(this._loop);
@@ -244,6 +245,13 @@ class Ajedrez2Tablero3D {
     this._grupoTablero.add(base, marcoN, marcoS, marcoE, marcoO);
     this.escena.add(this._grupoTablero);
 
+    if (this._planoClick) this._planoClick.geometry.dispose();
+    const geoPlano = new THREE.PlaneGeometry(8, 8);
+    geoPlano.rotateX(-Math.PI / 2);
+    this._planoClick = new THREE.Mesh(geoPlano, new THREE.MeshBasicMaterial({ visible: false }));
+    this._planoClick.position.y = 0.001;
+    this._grupoTablero.add(this._planoClick);
+
     // pedestal + hueco con luz led (mismo criterio que el resto de la casa).
     const anchoTableroTotal = 8 + grosorMarco * 2;
     const HUECO = 0.55;
@@ -323,20 +331,29 @@ class Ajedrez2Tablero3D {
   }
 
   cambiarTablero(tipoTablero) { this._crearTableroBase(tipoTablero); this._recolocarSiHabia(); }
-  _recolocarSiHabia() { if (this._piezasColocadas) this.colocarPersonajes(this._piezasColocadas); }
+  _recolocarSiHabia() { if (this._piezasColocadas) this.actualizar(this._piezasColocadas, this._opcionesActuales || {}); }
 
   _mundoDesdeCasilla(x, y) { return [x - 3.5, y - 3.5]; }
+  _casillaDesdeMundo(wx, wz) {
+    const x = Math.round(wx + 3.5), y = Math.round(wz + 3.5);
+    if (x < 0 || y < 0 || x > 7 || y > 7) return null;
+    if (Math.abs(wx + 3.5 - x) > 0.46 || Math.abs(wz + 3.5 - y) > 0.46) return null;
+    return { x, y };
+  }
 
-  // `lista`: [{ id:'medievalKnight', x, y, equipo:'blanco'|'negro', altura, rol }, ...]
-  // — showroom, no motor de reglas todavía: sólo pone cada personaje en su
-  // casilla, con un disco de color bajo los pies marcando el equipo (el
-  // modelo en sí no se retiñe — son texturas pintadas a mano, cambiarles
-  // el color a lo bruto se ve mal). `altura` es opcional (por defecto
-  // ALTURA_DEFECTO): cada pieza puede pedir su propio porte — torres más
-  // imponentes, peones más chicos — en vez de que todas midan lo mismo.
-  colocarPersonajes(lista) {
+  // `lista`: [{ id:'medievalKnight', x, y, equipo:'blanco'|'negro', altura, rol, giroExtra }, ...]
+  // `opciones`: { seleccion:{x,y}, legales:[{x,y}...], jaqueCasilla:{x,y}|null,
+  //   ultimoMovimiento:{desde:{x,y},hasta:{x,y}}|null } — mismo esquema que
+  //   chess3d.js, para que el motor de reglas de js/chess.js (compartido con
+  //   el ajedrez original) no tenga que saber nada de cómo se dibuja esto.
+  // Cada personaje lleva un disco de color bajo los pies marcando el equipo
+  // (el modelo en sí no se retiñe — son texturas pintadas a mano, cambiarles
+  // el color a lo bruto se ve mal).
+  actualizar(lista, opciones = {}) {
     this._piezasColocadas = lista;
+    this._opcionesActuales = opciones;
     this._grupoPiezas.clear();
+    this._grupoMarcas.clear();
     const ALTURA_DEFECTO = 1.05;
 
     const porId = {};
@@ -352,12 +369,7 @@ class Ajedrez2Tablero3D {
         porId[id].forEach((p) => {
           const escala = (p.altura || ALTURA_DEFECTO) / alto;
           const modelo = gltf.scene.clone(true);
-          modelo.traverse((o) => {
-            if (o.isMesh) {
-              o.castShadow = true; o.receiveShadow = true;
-              o.userData.piezaInfo = { id, x: p.x, y: p.y, equipo: p.equipo, rol: p.rol };
-            }
-          });
+          modelo.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
           const grupo = new THREE.Group();
           modelo.position.set(-centroX, -pisoY, 0);
           grupo.add(modelo);
@@ -389,25 +401,62 @@ class Ajedrez2Tablero3D {
         });
       }, (err) => console.error("No se pudo cargar el personaje " + id, err));
     });
+
+    if (opciones.seleccion) this._grupoMarcas.add(this._anillo(opciones.seleccion.x, opciones.seleccion.y, 0xe8b84b, 0.34));
+    if (opciones.legales) for (const { x, y } of opciones.legales) this._grupoMarcas.add(this._punto(x, y));
+    if (opciones.ultimoMovimiento) {
+      const { desde, hasta } = opciones.ultimoMovimiento;
+      this._grupoMarcas.add(this._anillo(desde.x, desde.y, 0xd1483a, 0.15, true));
+      this._grupoMarcas.add(this._anillo(hasta.x, hasta.y, 0xd1483a, 0.15, true));
+    }
+    if (opciones.jaqueCasilla) this._grupoMarcas.add(this._anillo(opciones.jaqueCasilla.x, opciones.jaqueCasilla.y, 0xff2a2a, 0.4, false, true));
   }
 
-  // Click sobre una pieza → onPiezaClick(info, id) con la misma `info` que
-  // se guardó en colocarPersonajes (x,y,equipo,rol) y el id del personaje
-  // (para poder recargar su GLTF en el modal de inspección 360°).
-  onPiezaClick(cb) { this._onPiezaClick = cb; }
+  _anillo(x, y, color, radio, fino, relleno) {
+    const [wx, wz] = this._mundoDesdeCasilla(x, y);
+    const geo = fino
+      ? new THREE.TorusGeometry(radio, 0.012, 8, 24)
+      : new THREE.TorusGeometry(radio, relleno ? 0.05 : 0.03, 8, 28);
+    geo.rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({ color, toneMapped: false, transparent: true, opacity: relleno ? 0.85 : 1 });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(wx, 0.02, wz);
+    return m;
+  }
 
-  _piezaBajoPuntero(e) {
+  _punto(x, y) {
+    const [wx, wz] = this._mundoDesdeCasilla(x, y);
+    const geo = new THREE.CylinderGeometry(0.1, 0.1, 0.02, 20);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xe8b84b, toneMapped: false, transparent: true, opacity: 0.55 });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(wx, 0.015, wz);
+    return m;
+  }
+
+  // Click en cualquier casilla del tablero → onCasilla(x,y). Se raycastea
+  // primero contra las piezas (así clickear una pieza elevada/con partes
+  // que sobresalen de su casilla sigue acertando) y si no hay nada, contra
+  // el plano invisible del tablero (casilla vacía). Quién puede jugar cada
+  // clic (selección propia, destino legal, deselección) lo decide
+  // js/app.js — acá sólo se reporta la coordenada.
+  onCasilla(cb) { this._onCasilla = cb; }
+
+  _casillaBajoPuntero(e) {
     const rect = this.renderer.domElement.getBoundingClientRect();
     this._puntero.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this._puntero.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     this._raycaster.setFromCamera(this._puntero, this.camara);
-    const hits = this._raycaster.intersectObjects(this._grupoPiezas.children, true);
-    for (const h of hits) {
+    const hitsPiezas = this._raycaster.intersectObjects(this._grupoPiezas.children, true);
+    for (const h of hitsPiezas) {
       let o = h.object;
       while (o && !o.userData.piezaInfo) o = o.parent;
-      if (o) return o.userData.piezaInfo;
+      if (o) return { x: o.userData.piezaInfo.x, y: o.userData.piezaInfo.y };
     }
-    return null;
+    if (!this._planoClick) return null;
+    const hits = this._raycaster.intersectObject(this._planoClick, false);
+    if (!hits.length) return null;
+    const { x: wx, z: wz } = hits[0].point;
+    return this._casillaDesdeMundo(wx, wz);
   }
 
   _eventos() {
@@ -433,8 +482,8 @@ class Ajedrez2Tablero3D {
     });
     dom.addEventListener("click", (e) => {
       if (this._movio) return;
-      const info = this._piezaBajoPuntero(e);
-      if (info && this._onPiezaClick) this._onPiezaClick(info);
+      const casilla = this._casillaBajoPuntero(e);
+      if (casilla && this._onCasilla) this._onCasilla(casilla.x, casilla.y);
     });
     dom.addEventListener("wheel", (e) => {
       e.preventDefault();

@@ -1826,10 +1826,24 @@ function sonidoConquistaTeg() {
 let tablero3dAjedrez2 = null;
 let tableroAjedrez2Activo = "rojoNegro";
 
+// Roles asignados por el usuario hasta ahora (sólo bando negro): Reina,
+// Rey, las dos Torres y los dos Alfiles. Caballos y peones de negras, y
+// todo el bando blanco, siguen sin asignar — como placeholder ahí sigue
+// parado el único personaje ya listo antes de estos cuatro
+// (medievalKnight), para que el tablero no se vea vacío de ese lado
+// mientras se decide.
 function formacionVidrieraAjedrez2() {
   const filas = [];
   for (let x = 0; x < 8; x++) filas.push({ id: "medievalKnight", x, y: 0, equipo: "blanco" });
-  for (let x = 0; x < 8; x++) filas.push({ id: "medievalKnight", x, y: 7, equipo: "negro" });
+
+  // fila de atrás de negras, posiciones estándar de ajedrez (a8..h8):
+  // torre, caballo(?), alfil, reina, rey, alfil, caballo(?), torre.
+  filas.push({ id: "torreNegra", x: 0, y: 7, equipo: "negro" });
+  filas.push({ id: "alfilNegro", x: 2, y: 7, equipo: "negro" });
+  filas.push({ id: "reinaNegra", x: 3, y: 7, equipo: "negro" });
+  filas.push({ id: "reyNegro", x: 4, y: 7, equipo: "negro" });
+  filas.push({ id: "alfilNegro", x: 5, y: 7, equipo: "negro" });
+  filas.push({ id: "torreNegra", x: 7, y: 7, equipo: "negro" });
   return filas;
 }
 

@@ -42,11 +42,102 @@ import fast_simplification as fs
 from PIL import Image
 
 
-def procesar(ruta_entrada, id_js, target_faces=12000, tex_size=1024, salida_dir=None):
-    print(f"Cargando {ruta_entrada}…")
+# trimesh no trae un parser de FBX propio (no hay librería pura-Python
+# confiable para el binario de Autodesk). Los .glb sí los lee trimesh
+# directo; para .fbx se usa assimp_py (bindings de la librería Assimp,
+# instalación autocontenida vía pip, sin pedir Blender ni el SDK de
+# Autodesk) y se arma la malla a mano con los mismos datos que trimesh
+# esperaría (vértices/caras/UV/textura), para que el resto del pipeline
+# (decimar, achicar textura, exportar GLB) no tenga que saber cuál de los
+# dos formatos entró.
+def _cargar_fbx(ruta):
+    import assimp_py as ap
+    escena = ap.import_file(ruta, ap.Process_Triangulate | ap.Process_JoinIdenticalVertices)
+    if escena.num_meshes == 0:
+        raise SystemExit(f"'{ruta}' no tiene ninguna malla adentro.")
+    m = escena.meshes[0]
+    if not m.texcoords or m.texcoords[0] is None:
+        raise SystemExit(f"'{ruta}': la malla no tiene coordenadas UV.")
+
+    puntos = np.frombuffer(m.vertices, dtype=np.float32).reshape(-1, 3).astype(np.float64).copy()
+    caras = np.frombuffer(m.indices, dtype=np.uint32).reshape(-1, 3).astype(np.int64).copy()
+    uv = np.frombuffer(m.texcoords[0], dtype=np.float32).reshape(-1, 2).astype(np.float64).copy()
+    uv[:, 1] = 1.0 - uv[:, 1]  # FBX mide V desde arriba, glTF/trimesh desde abajo
+
+    material_assimp = escena.materials[m.material_index]
+    texturas = material_assimp.get("TEXTURES", {})
+    ruta_difusa = None
+    for clave in (ap.TextureType_DIFFUSE, ap.TextureType_UNKNOWN, ap.TextureType_AMBIENT):
+        if clave in texturas and texturas[clave]:
+            ruta_difusa = texturas[clave][0]
+            break
+    if not ruta_difusa:
+        raise SystemExit(f"'{ruta}': el material no tiene una textura difusa/base color referenciada.")
+
+    # La ruta que trae el FBX suele apuntar a una subcarpeta .fbm que en
+    # algunos de los .zip que provee el usuario no está (esos vienen con
+    # una carpeta "textures/" al lado en vez de al lado del .fbx) — si la
+    # ruta tal cual no existe, se busca cualquier archivo con el mismo
+    # nombre (sin importar mayúsculas/minúsculas) bajo la carpeta del .fbx.
+    base_dir = os.path.dirname(os.path.abspath(ruta))
+    ruta_imagen = os.path.join(base_dir, ruta_difusa)
+    if not os.path.isfile(ruta_imagen):
+        objetivo = os.path.basename(ruta_difusa).lower()
+        encontrada = None
+        for raiz, _dirs, archivos in os.walk(base_dir):
+            for a in archivos:
+                if a.lower() == objetivo:
+                    encontrada = os.path.join(raiz, a)
+                    break
+            if encontrada:
+                break
+        if not encontrada:
+            raise SystemExit(f"'{ruta}': no se encontró la textura '{ruta_difusa}' ni por nombre en {base_dir}.")
+        ruta_imagen = encontrada
+    imagen = Image.open(ruta_imagen)
+    imagen.load()  # el archivo se cierra al salir del with implícito de Image.open; forzar la carga a memoria acá
+
+    material = trimesh.visual.material.PBRMaterial(baseColorTexture=imagen)
+    malla = trimesh.Trimesh(
+        vertices=puntos, faces=caras, process=False,
+        visual=trimesh.visual.TextureVisuals(uv=uv, material=material),
+    )
+    # Las mallas de Tripo3D no vienen soldadas por posición — cada
+    # triángulo trae sus propios vértices "propios" aunque coincidan
+    # exactamente con los del triángulo vecino (probablemente por cómo
+    # generan la malla puertas adentro, con algo de ruido de punto
+    # flotante entre copias del mismo punto). Sin soldar, el resultado
+    # queda partido en decenas de miles de "islas" desconectadas
+    # (comprobado: 75.000+ en una de las pruebas) y ahí la decimación por
+    # colapso de aristas no tiene aristas compartidas para colapsar, así
+    # que en vez de simplificar de verdad literalmente hace explotar la
+    # malla en fragmentos — se nota altiro en el resultado, queda un
+    # amasijo irreconocible en vez del personaje. merge_vertices() suelda
+    # por posición (con tolerancia, no exigiendo bits idénticos) y deja
+    # la malla en condiciones de decimarse de verdad.
+    malla.merge_vertices(merge_tex=False, merge_norm=True)
+
+    # Los FBX de Tripo3D vienen en eje Z-arriba (convención típica de
+    # Autodesk/3ds Max); glTF/three.js asumen Y-arriba. Sin este ajuste el
+    # personaje queda "acostado" de costado en la escena — se nota
+    # altiro en cualquier render, no es sutil. Rotación -90° en X:
+    # (x, y, z) -> (x, z, -y).
+    v = malla.vertices
+    malla.vertices = np.column_stack([v[:, 0], v[:, 2], -v[:, 1]])
+    return malla
+
+
+def _cargar_malla(ruta_entrada):
+    if ruta_entrada.lower().endswith(".fbx"):
+        return _cargar_fbx(ruta_entrada)
     escena = trimesh.load(ruta_entrada, force="scene")
     nombre_geo = list(escena.geometry.keys())[0]
-    malla = escena.geometry[nombre_geo]
+    return escena.geometry[nombre_geo]
+
+
+def procesar(ruta_entrada, id_js, target_faces=12000, tex_size=1024, salida_dir=None):
+    print(f"Cargando {ruta_entrada}…")
+    malla = _cargar_malla(ruta_entrada)
     print(f"  original: {len(malla.vertices)} vértices, {len(malla.faces)} caras")
 
     visual = malla.visual

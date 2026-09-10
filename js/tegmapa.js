@@ -20,15 +20,6 @@ const PALETA_JUGADORES_TEG = {
 };
 const ORDEN_COLORES_TEG = ["azul", "rojo", "verde", "dorado", "violeta", "blanco"];
 
-// Color de las líneas de adyacencia según el continente del país de origen
-// — así de un vistazo se nota qué conexiones son "internas" a un
-// continente (todas del mismo color) y cuáles cruzan a otro (cambian de
-// color a mitad de camino, porque el destino tiene el suyo propio).
-const COLOR_CONTINENTE_TEG = {
-  america_norte: "#4a7fd6", america_central: "#4ad68f", america_sur: "#e8b84b",
-  europa: "#9a5fe0", africa: "#e0483a", asia_oceania: "#eef0f2",
-};
-
 // Aclara/oscurece un color hex mezclándolo hacia blanco (cantidad > 0) o
 // negro (cantidad < 0) — para el moteado de las piedras y los tintes de
 // continente a partir de un único color base.
@@ -105,11 +96,15 @@ class TegMapa {
     this._tiempo = 0;
     this._ultimoFrameLineas = 0;
 
+    this._proximoGlitch = 3 + Math.random() * 4;
+    this._glitchHasta = 0;
+
     this._crearLuces();
     this._crearHabitacion();
     this._crearTableroYMapa();
     this._crearFichas();
     this._crearOverlayLineas();
+    this._crearEscaner();
     this._eventos();
     this._loop = this._loop.bind(this);
     requestAnimationFrame(this._loop);
@@ -242,24 +237,37 @@ class TegMapa {
     if (this._pathTierra) {
       ctx.save();
       ctx.clip(this._pathTierra);
-      const madera = ctx.createLinearGradient(0, 0, W, H);
-      madera.addColorStop(0, "#caa15c"); madera.addColorStop(0.5, "#a97f3c"); madera.addColorStop(1, "#7a5230");
-      ctx.fillStyle = madera;
+      // Terreno táctico tipo HUD militar (Battlefield/Medal of Honor,
+      // pedido explícito) en vez de madera: base grafito-oliva oscura,
+      // grilla fina ámbar y trazos angulares tipo circuito — nada de
+      // vetas orgánicas curvas, todo ángulos rectos/diagonales.
+      const terreno = ctx.createLinearGradient(0, 0, W, H);
+      terreno.addColorStop(0, "#3a4038"); terreno.addColorStop(0.5, "#262b22"); terreno.addColorStop(1, "#14170f");
+      ctx.fillStyle = terreno;
       ctx.fillRect(0, 0, W, H);
-      ctx.globalAlpha = 0.1;
-      for (let i = 0; i < 70; i++) {
-        ctx.strokeStyle = i % 2 ? "#e8c988" : "#4a3418";
-        ctx.lineWidth = 1 + Math.random() * 1.8;
+
+      ctx.strokeStyle = "rgba(255,176,64,0.09)";
+      ctx.lineWidth = 1;
+      const paso = W * 0.018;
+      for (let x = 0; x < W; x += paso) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+      for (let y = 0; y < H; y += paso) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+      ctx.globalAlpha = 0.16;
+      for (let i = 0; i < 50; i++) {
+        ctx.strokeStyle = i % 3 === 0 ? "#ffb347" : i % 3 === 1 ? "#4fd0e0" : "#5a6350";
+        ctx.lineWidth = 1 + Math.random() * 1.3;
+        const x0 = Math.random() * W, y0 = Math.random() * H;
+        const largo = W * (0.025 + Math.random() * 0.06);
+        const ang = Math.round(Math.random() * 8) * (Math.PI / 4); // ángulos rectos/diagonales, look "circuito"
         ctx.beginPath();
-        const y0 = Math.random() * H;
-        ctx.moveTo(0, y0);
-        ctx.bezierCurveTo(W * 0.33, y0 + (Math.random() - 0.5) * H * 0.12, W * 0.66, y0 + (Math.random() - 0.5) * H * 0.12, W, y0 + (Math.random() - 0.5) * H * 0.08);
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x0 + Math.cos(ang) * largo, y0 + Math.sin(ang) * largo);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
       ctx.restore();
-      ctx.strokeStyle = "rgba(20,14,6,0.45)";
-      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = "rgba(255,176,64,0.6)";
+      ctx.lineWidth = 0.9;
       ctx.stroke(this._pathTierra);
     }
 
@@ -376,9 +384,60 @@ class TegMapa {
     for (let i = 1; i < 12; i++) { const x = (W / 12) * i; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
     for (let i = 1; i < 7; i++) { const y = (H / 7) * i; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
 
+    // rosa de los vientos náutica en una esquina, sobre agua abierta — el
+    // usuario pasó una referencia (estrella de 8 puntas + anillo de
+    // grados + N/S/E/W); se recrea a mano en canvas, es un motivo
+    // geométrico estándar, no hace falta el vector original.
+    this._dibujarRosaVientos(ctx, W * 0.9, H * 0.84, W * 0.065);
+
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
+  }
+
+  _dibujarRosaVientos(ctx, cx, cy, r) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = "rgba(190,230,255,0.5)";
+    ctx.lineWidth = Math.max(1, r * 0.014);
+
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.8, 0, Math.PI * 2); ctx.stroke();
+
+    for (let deg = 0; deg < 360; deg += 10) {
+      const a = (deg * Math.PI) / 180;
+      const largo = deg % 30 === 0 ? r * 0.13 : r * 0.06;
+      const x1 = Math.sin(a) * r, y1 = -Math.cos(a) * r;
+      const x2 = Math.sin(a) * (r - largo), y2 = -Math.cos(a) * (r - largo);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    }
+
+    const punta = (grados, largo, ancho, relleno) => {
+      const rad = (grados * Math.PI) / 180;
+      const dx = Math.sin(rad), dy = -Math.cos(rad);
+      const px = -dy, py = dx;
+      ctx.beginPath();
+      ctx.moveTo(px * ancho, py * ancho);
+      ctx.lineTo(dx * largo, dy * largo);
+      ctx.lineTo(-px * ancho, -py * ancho);
+      ctx.closePath();
+      ctx.fillStyle = relleno; ctx.fill();
+      ctx.stroke();
+    };
+    for (const ang of [0, 90, 180, 270]) punta(ang, r * 0.78, r * 0.09, "rgba(190,230,255,0.55)");
+    for (const ang of [45, 135, 225, 315]) punta(ang, r * 0.46, r * 0.06, "rgba(190,230,255,0.3)");
+    const centro = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.09);
+    centro.addColorStop(0, "rgba(230,246,255,0.8)"); centro.addColorStop(1, "rgba(230,246,255,0)");
+    ctx.fillStyle = centro; ctx.beginPath(); ctx.arc(0, 0, r * 0.09, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = "rgba(220,240,255,0.7)";
+    ctx.font = `700 ${Math.round(r * 0.24)}px Georgia, serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("N", 0, -r * 1.18);
+    ctx.fillText("S", 0, r * 1.18);
+    ctx.fillText("E", r * 1.18, 0);
+    ctx.fillText("O", -r * 1.18, 0);
+    ctx.restore();
   }
 
   // Capa de tierra: un plano transparente aparte (no la cara de arriba del
@@ -580,7 +639,7 @@ class TegMapa {
   // países en el mismo tablero, mucho más chicas que las de Go/Ajedrez para
   // que no se pisen entre sí ni se salgan del país que representan.
   _crearFichas() {
-    this._radioFicha = 0.1;
+    this._radioFicha = 0.075;
     const geoPiedra = this._geometriaPiedra(this._radioFicha);
     const altura = 0.05 + this._radioFicha * 0.62;
     for (const id of Object.keys(TERRITORIOS)) {
@@ -594,8 +653,8 @@ class TegMapa {
       grupo.add(piedra);
 
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this._spriteNumero("0"), transparent: true, depthTest: false, fog: false }));
-      sprite.scale.set(0.16, 0.16, 1);
-      sprite.position.y = this._radioFicha * 0.62 + 0.08;
+      sprite.scale.set(0.12, 0.12, 1);
+      sprite.position.y = this._radioFicha * 0.62 + 0.06;
       grupo.add(sprite);
 
       const geoAnillo = new THREE.TorusGeometry(this._radioFicha * 1.3, 0.015, 8, 24);
@@ -649,20 +708,99 @@ class TegMapa {
     this._actualizarLineas();
   }
 
+  // Sólo las conexiones que le sirven al jugador EN TURNO en la fase
+  // actual — antes se dibujaban las 1317 aristas del mapa entero sin
+  // importar de quién eran, un empaste. En ataque: fronteras propio→enemigo
+  // (por dónde puede atacar). En fortificación: sólo entre territorios
+  // propios (por dónde puede reagrupar). Se recalcula al cambiar de fase/
+  // turno (ver actualizar()), no en cada frame — la animación del dash sí
+  // es por frame, eso sigue en _actualizarLineas.
+  _recalcularLineasVisibles(teg) {
+    const esPropio = (id) => teg.board[id] && teg.board[id].dueno === teg.turno;
+    if (teg.fase === "ataque") {
+      this._aristasVisibles = this._aristasLineas.filter(([a, b]) => esPropio(a) !== esPropio(b));
+      this._colorLineas = "#d1483a"; // carmesí
+    } else if (teg.fase === "fortificacion") {
+      this._aristasVisibles = this._aristasLineas.filter(([a, b]) => esPropio(a) && esPropio(b));
+      this._colorLineas = "#3ecf6e"; // verde
+    } else {
+      this._aristasVisibles = [];
+    }
+    this._actualizarLineas();
+  }
+
   _actualizarLineas() {
     const ctx = this._ctxLineas, W = this._wLineas, H = this._hLineas;
     ctx.clearRect(0, 0, W, H);
-    ctx.lineWidth = 1.4;
+    ctx.lineWidth = 1.6;
     ctx.setLineDash([6, 5]);
     ctx.lineDashOffset = -this._tiempo * 5;
-    for (const [a, b] of this._aristasLineas) {
-      ctx.strokeStyle = COLOR_CONTINENTE_TEG[TERRITORIOS[a].continente] || "#c9a961";
-      ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = this._colorLineas || "#c9a961";
+    ctx.globalAlpha = 0.6;
+    for (const [a, b] of this._aristasVisibles || []) {
       const [x1, y1] = this._uvPais(a, W, H), [x2, y2] = this._uvPais(b, W, H);
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     }
     ctx.globalAlpha = 1;
     this._texLineas.needsUpdate = true;
+  }
+
+  // Línea de "escaneo" tipo holograma (pedido explícito, inspirado en el
+  // HUD de un radar militar): una franja angosta y suave que barre el
+  // tablero de punta a punta muy lento — nada de sirena, apenas un brillo
+  // frío que cruza y vuelve. Se anima en _loop (posición + opacidad), no
+  // hace falta redibujar ningún canvas.
+  _crearEscaner() {
+    const cv = document.createElement("canvas");
+    cv.width = 16; cv.height = 128;
+    const ctx = cv.getContext("2d");
+    const g = ctx.createLinearGradient(0, 0, 0, 128);
+    g.addColorStop(0, "rgba(140,220,255,0)");
+    g.addColorStop(0.5, "rgba(190,238,255,0.9)");
+    g.addColorStop(1, "rgba(140,220,255,0)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 16, 128);
+    const tex = new THREE.CanvasTexture(cv);
+
+    const geo = new THREE.PlaneGeometry(this.anchoMundo * 1.02, this.profMundo * 0.05);
+    geo.rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, opacity: 0.22,
+      blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false,
+    });
+    this._planoEscaner = new THREE.Mesh(geo, mat);
+    this._planoEscaner.position.y = 0.006; // encima del mapa y las líneas, debajo de las fichas
+    this._grupoTablero.add(this._planoEscaner);
+  }
+
+  // Barrido del escáner (lento, va y viene) + un glitch sutil de vez en
+  // cuando (un saltito de UV + parpadeo de opacidad de un par de décimas
+  // de segundo, no todo el rato — así se lee como "detalle", no como
+  // falla de video). Pedido explícito: "muy sutil así se ve más
+  // profesional", ambos efectos están calibrados para eso.
+  _actualizarHolograma() {
+    if (this._planoEscaner) {
+      const ciclo = 10; // segundos por barrido completo, ida y vuelta
+      const t = (this._tiempo % ciclo) / ciclo;
+      const ida = t < 0.5 ? t * 2 : 2 - t * 2; // 0→1→0, va y vuelve
+      this._planoEscaner.position.z = -this.profMundo / 2 + ida * this.profMundo;
+      this._planoEscaner.material.opacity = 0.16 + Math.sin(ida * Math.PI) * 0.12;
+    }
+
+    if (!this._planoTierra) return;
+    if (this._glitchHasta === 0 && this._tiempo > this._proximoGlitch) {
+      this._glitchHasta = this._tiempo + 0.12 + Math.random() * 0.1;
+    }
+    if (this._glitchHasta > 0) {
+      if (this._tiempo < this._glitchHasta) {
+        this._planoTierra.material.map.offset.x = (Math.random() - 0.5) * 0.006;
+        this._planoTierra.material.opacity = 0.85 + Math.random() * 0.15;
+      } else {
+        this._planoTierra.material.map.offset.x = 0;
+        this._planoTierra.material.opacity = 1;
+        this._glitchHasta = 0;
+        this._proximoGlitch = this._tiempo + 4 + Math.random() * 5;
+      }
+    }
   }
 
   onTerritorio(cb) { this._onTerritorio = cb; }
@@ -689,8 +827,12 @@ class TegMapa {
     }
     // Las líneas de conexión sólo se muestran en ataque/fortificación —
     // ahí es cuando importa ver quién linda con quién; en refuerzo sólo
-    // suman ruido visual sobre 256 fichas.
-    if (this._planoLineas) this._planoLineas.visible = teg.fase === "ataque" || teg.fase === "fortificacion";
+    // suman ruido visual sobre 256 fichas. Y sólo las del jugador en
+    // turno (ver _recalcularLineasVisibles), no las 1317 del mapa entero.
+    if (this._planoLineas) {
+      this._planoLineas.visible = teg.fase === "ataque" || teg.fase === "fortificacion";
+      this._recalcularLineasVisibles(teg);
+    }
   }
 
   // ---- interacción ----
@@ -806,6 +948,7 @@ class TegMapa {
     // el agua "se prende y apaga" con un pulso lento y suave — mucho más
     // lento que el parpadeo tipo neón de la luz del pedestal de abajo.
     if (this._matAgua) this._matAgua.emissiveIntensity = this._intensidadAguaBase + Math.sin(this._tiempo * 0.6) * 0.14;
+    this._actualizarHolograma();
     const r = this._distancia;
     const cx = r * Math.sin(this._elevacion) * Math.sin(this._azimut);
     const cz = r * Math.sin(this._elevacion) * Math.cos(this._azimut);

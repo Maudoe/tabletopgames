@@ -547,7 +547,13 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
 .teg-ayuda {
   text-align: center; color: var(--tenue); font-size: 0.88rem; margin: 0 0 10px;
 }
+/* El mapa y el panel de info van en fila — antes el panel (objetivo,
+   cartas, log) quedaba apilado debajo del mapa, "flotando" en medio de la
+   pantalla; ahora es un cajón desplegable al costado, más de HUD táctico
+   que de formulario. */
+.teg-tablero-fila { display: flex; gap: 16px; align-items: stretch; }
 .mapa-envoltorio {
+  flex: 1; min-width: 0;
   height: min(70vh, 760px);
   background:
     radial-gradient(ellipse 70% 60% at 50% 20%, rgba(var(--tinta-rgb), 0.32), transparent 68%),
@@ -557,16 +563,33 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
   box-shadow: 0 0 0 1px rgba(6,5,5,0.75), var(--sombra);
   overflow: hidden;
 }
-.pantalla-completa .mapa-envoltorio {
+.pantalla-completa .teg-tablero-fila {
   height: min(88vh, 1500px);
   max-width: 1700px;
   margin: 0 auto;
 }
+.pantalla-completa .mapa-envoltorio { height: 100%; }
 /* El mapa (canvas Three.js) lo inserta tegmapa.js acá adentro — mismo
    criterio que .tablero-madera para Go/Ajedrez: ocupa el 100% del panel. */
 .mapa-teg { width: 100%; height: 100%; touch-action: none; }
 .mapa-teg canvas { display: block; width: 100%; height: 100%; cursor: grab; }
 .mapa-teg:active canvas { cursor: grabbing; }
+
+.teg-drawer {
+  width: 300px; flex-shrink: 0;
+  background: var(--carta);
+  border: 1px solid rgba(var(--oro-rgb), 0.4);
+  border-radius: var(--radio);
+  box-shadow: 0 0 0 1px rgba(6,5,5,0.75), var(--sombra);
+  padding: 18px; overflow-y: auto;
+  transition: width var(--transicion), opacity var(--transicion), padding var(--transicion), border-width var(--transicion);
+}
+.teg-drawer.cerrado {
+  width: 0; padding: 0; opacity: 0; border-width: 0; overflow: hidden;
+  pointer-events: none;
+}
+.teg-drawer-chips { justify-content: flex-start; margin: 0 0 4px; }
+.teg-drawer .info-chip { flex: 1; min-width: 0; }
 
 .teg-panel-detalle { margin-top: 18px; display: grid; gap: 16px; }
 .teg-fila-jugador {
@@ -620,6 +643,11 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
   .tablero-cabecera { justify-content: center; text-align: center; }
   .acciones-tablero { justify-content: center; }
   .info-chip { min-width: 76px; padding: 8px 12px; }
+  /* el cajón lateral de TEG no entra al costado del mapa en pantallas
+     angostas — pasa a apilarse debajo, como el panel viejo. */
+  .teg-tablero-fila { flex-direction: column; }
+  .teg-drawer { width: 100%; }
+  .teg-drawer.cerrado { width: 100%; height: 0; padding: 0; }
 }
 
 @media (max-width: 620px) {

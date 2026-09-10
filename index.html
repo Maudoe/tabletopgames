@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0a0908">
   <title>GameHub</title>
-  <link rel="stylesheet" href="css/style.css?v=15">
+  <link rel="stylesheet" href="css/style.css?v=16">
 </head>
 <body class="menu-fondo">
 
@@ -157,35 +157,40 @@
           <button class="btn-accion" id="btn-pasar-fase-teg">Pasar fase</button>
           <button class="btn-accion rojo" id="btn-rendirse-teg">Rendirse</button>
           <button class="btn-accion" id="btn-nueva-teg">Nueva partida</button>
+          <button class="btn-accion" id="btn-info-teg" aria-expanded="true">☰ Info</button>
           <button class="btn-accion" id="btn-pantalla-completa-teg">⛶ Pantalla completa</button>
         </div>
       </div>
 
       <p class="teg-ayuda" id="teg-ayuda">Elegí un territorio propio para colocar refuerzos.</p>
 
-      <div class="mapa-envoltorio">
-        <div class="mapa-teg" id="mapa-teg"></div>
-      </div>
+      <div class="teg-tablero-fila">
+        <div class="mapa-envoltorio">
+          <div class="mapa-teg" id="mapa-teg"></div>
+        </div>
 
-      <div class="panel-lateral">
-        <div class="info-chip"><div class="num" id="teg-refuerzos">0</div><div class="etq">Refuerzos por colocar</div></div>
-        <div class="info-chip"><div class="num" id="teg-territorios">0</div><div class="etq">Territorios propios</div></div>
-        <div class="info-chip"><div class="num" id="teg-cartas-num">0</div><div class="etq">Cartas en mano</div></div>
-      </div>
+        <aside class="teg-drawer" id="teg-drawer">
+          <div class="panel-lateral teg-drawer-chips">
+            <div class="info-chip"><div class="num" id="teg-refuerzos">0</div><div class="etq">Refuerzos por colocar</div></div>
+            <div class="info-chip"><div class="num" id="teg-territorios">0</div><div class="etq">Territorios propios</div></div>
+            <div class="info-chip"><div class="num" id="teg-cartas-num">0</div><div class="etq">Cartas en mano</div></div>
+          </div>
 
-      <div class="teg-panel-detalle">
-        <div class="campo">
-          <div class="campo-label">Tu objetivo secreto</div>
-          <p class="campo-nota" id="teg-objetivo-texto">—</p>
-        </div>
-        <div class="campo">
-          <div class="campo-label">Tus cartas (elegí 3 para canjear)</div>
-          <div class="fila-swatches" id="teg-cartas"></div>
-        </div>
-        <div class="campo">
-          <div class="campo-label">Último combate</div>
-          <p class="campo-nota" id="teg-log-texto">Sin combates todavía.</p>
-        </div>
+          <div class="teg-panel-detalle">
+            <div class="campo">
+              <div class="campo-label">Tu objetivo secreto</div>
+              <p class="campo-nota" id="teg-objetivo-texto">—</p>
+            </div>
+            <div class="campo">
+              <div class="campo-label">Tus cartas (elegí 3 para canjear)</div>
+              <div class="fila-swatches" id="teg-cartas"></div>
+            </div>
+            <div class="campo">
+              <div class="campo-label">Último combate</div>
+              <p class="campo-nota" id="teg-log-texto">Sin combates todavía.</p>
+            </div>
+          </div>
+        </aside>
       </div>
     </section>
 
@@ -467,7 +472,7 @@
   <script src="js/teg.js?v=2"></script>
   <script src="js/board3d.js?v=18"></script>
   <script src="js/chess3d.js?v=14"></script>
-  <script src="js/tegmapa.js?v=18"></script>
-  <script src="js/app.js?v=22"></script>
+  <script src="js/tegmapa.js?v=20"></script>
+  <script src="js/app.js?v=23"></script>
 </body>
 </html>

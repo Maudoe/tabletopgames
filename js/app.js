@@ -1156,6 +1156,15 @@ $("#btn-pantalla-completa-teg").addEventListener("click", () => {
   if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
   else document.exitFullscreen?.();
 });
+// cajón lateral (objetivo/cartas/log) — se puede cerrar para que el mapa
+// use todo el ancho; el mapa 3D tiene que enterarse del resize real, no
+// sólo la animación CSS, o el canvas queda con el tamaño viejo.
+$("#btn-info-teg").addEventListener("click", () => {
+  const drawer = $("#teg-drawer");
+  const cerrado = drawer.classList.toggle("cerrado");
+  $("#btn-info-teg").setAttribute("aria-expanded", String(!cerrado));
+  setTimeout(() => mapaTeg?.resize(), 340);
+});
 
 function inicializarMapaTeg() {
   if (mapaTeg) return;

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0a0908">
   <title>GameHub</title>
-  <link rel="stylesheet" href="css/style.css?v=26">
+  <link rel="stylesheet" href="css/style.css?v=27">
 </head>
 <body class="menu-fondo">
 
@@ -265,10 +265,20 @@
         </div>
       </div>
 
-      <p class="teg-ayuda">Arrastrá para girar la cámara, rueda del mouse para acercar. Sólo el caballero medieval está listo por ahora — el resto de los personajes se van a ir agregando de a uno.</p>
+      <p class="teg-ayuda">Arrastrá para girar la cámara, rueda del mouse para acercar. Hacé clic en una pieza para inspeccionarla en 360°.</p>
 
-      <div class="tablero-envoltorio">
-        <div class="tablero-madera" id="tablero-ajedrez2-madera"></div>
+      <div class="teg-tablero-fila">
+        <div class="tablero-envoltorio">
+          <div class="tablero-madera" id="tablero-ajedrez2-madera"></div>
+        </div>
+
+        <aside class="teg-drawer cerrado" id="ajedrez2-inspector-drawer">
+          <button class="modal-cerrar" id="ajedrez2-inspector-cerrar" style="float:right;">✕</button>
+          <div class="campo-label" id="ajedrez2-inspector-titulo">—</div>
+          <p class="campo-nota" id="ajedrez2-inspector-sub">—</p>
+          <div class="ajedrez2-inspector-canvas" id="ajedrez2-inspector-canvas"></div>
+          <p class="campo-nota" style="margin-top:10px;">Arrastrá para girar 360°, rueda del mouse para acercar.</p>
+        </aside>
       </div>
     </section>
 
@@ -697,8 +707,16 @@
   <script src="js/personajes/reinaNegra.js?v=1"></script>
   <script src="js/personajes/reyNegro.js?v=1"></script>
   <script src="js/personajes/torreNegra.js?v=1"></script>
-  <script src="js/personajes/alfilNegro.js?v=1"></script>
-  <script src="js/ajedrez2_3d.js?v=1"></script>
-  <script src="js/app.js?v=29"></script>
+  <script src="js/personajes/alfilNegro.js?v=2"></script>
+  <script src="js/personajes/peonNegro.js?v=1"></script>
+  <script src="js/personajes/reyBlanco.js?v=1"></script>
+  <script src="js/personajes/reinaBlanca.js?v=1"></script>
+  <script src="js/personajes/torreBlanca.js?v=1"></script>
+  <script src="js/personajes/alfilBlanco.js?v=1"></script>
+  <script src="js/personajes/caballoBlanco.js?v=1"></script>
+  <script src="js/personajes/peonBlanco.js?v=1"></script>
+  <script src="js/personajes/caballoNegro.js?v=1"></script>
+  <script src="js/ajedrez2_3d.js?v=6"></script>
+  <script src="js/app.js?v=33"></script>
 </body>
 </html>

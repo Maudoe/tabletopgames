@@ -28,6 +28,9 @@ class Ajedrez2Tablero3D {
     contenedor.appendChild(this.dom);
 
     this._grupoPiezas = new THREE.Group();
+    this._raycaster = new THREE.Raycaster();
+    this._puntero = new THREE.Vector2();
+    this._onPiezaClick = null;
 
     this._azimut = 0.08;
     this._elevacion = 0.78;
@@ -56,9 +59,9 @@ class Ajedrez2Tablero3D {
   }
 
   _crearLuces() {
-    const hemi = new THREE.HemisphereLight(0x8a734a, 0x0a0806, 0.5);
+    const hemi = new THREE.HemisphereLight(0x8a734a, 0x0a0806, 0.62);
     this.escena.add(hemi);
-    this.key = new THREE.DirectionalLight(0xfff2d8, 1.9);
+    this.key = new THREE.DirectionalLight(0xfff2d8, 2.3);
     this.key.position.set(-4.2, 6.5, 3.4);
     this.key.castShadow = true;
     this.key.shadow.mapSize.set(2048, 2048);
@@ -71,9 +74,31 @@ class Ajedrez2Tablero3D {
     this.key.shadow.bias = -0.0018;
     this.key.shadow.radius = 4;
     this.escena.add(this.key);
-    const fill = new THREE.DirectionalLight(0x9db4d9, 0.4);
+    const fill = new THREE.DirectionalLight(0x9db4d9, 0.6);
     fill.position.set(5, 3, -4);
     this.escena.add(fill);
+    // Relleno frontal suave, de frente a la cámara por defecto: sin esto
+    // las piezas (sobre todo las negras, ya oscuras de por sí) se
+    // comían casi toda la luz en su propia sombra frontal.
+    const frente = new THREE.DirectionalLight(0xd8e4ff, 0.55);
+    frente.position.set(0, 4, 14);
+    this.escena.add(frente);
+
+    // "Luz de contra" — un par de focos cálidos detrás de cada fila de
+    // piezas (no del tablero: de las piezas), apuntando hacia la cámara,
+    // para separarlas del fondo oscuro con un borde de luz — pedido
+    // explícito: "simular una luz atrás de las fichas negras". Se hace
+    // para las dos filas (no sólo negras) porque blancas está igual de
+    // lejos de la luna en la fila opuesta y se beneficia igual.
+    this.contraNegras = new THREE.SpotLight(0xbfd4ff, 5.5, 20, Math.PI / 3.2, 0.6, 1.4);
+    this.contraNegras.position.set(0, 2.6, 7.2);
+    this.contraNegras.target.position.set(0, 1, 3.5);
+    this.escena.add(this.contraNegras, this.contraNegras.target);
+
+    this.contraBlancas = new THREE.SpotLight(0xffe6bf, 4.5, 20, Math.PI / 3.2, 0.6, 1.4);
+    this.contraBlancas.position.set(0, 2.6, -7.2);
+    this.contraBlancas.target.position.set(0, 1, -3.5);
+    this.escena.add(this.contraBlancas, this.contraBlancas.target);
   }
 
   _crearHabitacion() {
@@ -235,9 +260,54 @@ class Ajedrez2Tablero3D {
     pedestal.castShadow = true;
     this._grupoTablero.add(pedestal);
 
+    // -- tira de neón en el hueco (idéntica a Go/Ajedrez/Damas: un "tubo"
+    // sólido nítido + un resplandor difuso encima) — se había perdido al
+    // armar este archivo copiando de damas3d.js, el hueco quedaba sin luz
+    // propia adentro, sólo con la luz puntual invisible. --
+    if (!this._colorLuzInferior) this._colorLuzInferior = colorLuz;
+    const grosorTiraSolida = 0.09;
+    const matTiraSolida = new THREE.MeshBasicMaterial({ color: this._colorLuzInferior, toneMapped: false, fog: false });
+    const largoTiraNS = anchoPedestal - grosorTiraSolida * 1.6;
+    const tiraN = new THREE.Mesh(new THREE.BoxGeometry(largoTiraNS, grosorTiraSolida, grosorTiraSolida), matTiraSolida);
+    tiraN.position.set(0, pisoHueco + grosorTiraSolida * 0.6, -anchoPedestal / 2 + grosorTiraSolida * 0.8);
+    const tiraS = tiraN.clone(); tiraS.position.z = anchoPedestal / 2 - grosorTiraSolida * 0.8;
+    const tiraE = new THREE.Mesh(new THREE.BoxGeometry(grosorTiraSolida, grosorTiraSolida, largoTiraNS), matTiraSolida);
+    tiraE.position.set(-anchoPedestal / 2 + grosorTiraSolida * 0.8, pisoHueco + grosorTiraSolida * 0.6, 0);
+    const tiraO = tiraE.clone(); tiraO.position.x = anchoPedestal / 2 - grosorTiraSolida * 0.8;
+    this._tirasSolidasInferior = [tiraN, tiraS, tiraE, tiraO];
+    this._tirasSolidasInferior.forEach((t) => this._grupoTablero.add(t));
+
+    const N_TIRA = 512;
+    const cvGlowInferior = document.createElement("canvas");
+    cvGlowInferior.width = cvGlowInferior.height = N_TIRA;
+    const ctxGlowInferior = cvGlowInferior.getContext("2d");
+    const escalaPlanoTira = 1.35;
+    const margenTira = N_TIRA * (1 - 1 / escalaPlanoTira) / 2;
+    ctxGlowInferior.filter = `blur(${N_TIRA * 0.05}px)`;
+    ctxGlowInferior.strokeStyle = "#ffffff";
+    ctxGlowInferior.lineWidth = N_TIRA * 0.032;
+    ctxGlowInferior.strokeRect(margenTira, margenTira, N_TIRA - margenTira * 2, N_TIRA - margenTira * 2);
+    ctxGlowInferior.filter = "none";
+    const texGlowInferior = new THREE.CanvasTexture(cvGlowInferior);
+
+    const geoGlowInferior = new THREE.PlaneGeometry(anchoPedestal * escalaPlanoTira, anchoPedestal * escalaPlanoTira);
+    geoGlowInferior.rotateX(-Math.PI / 2);
+    this._opacidadGlowInferiorBase = 0.85;
+    const matGlowInferior = new THREE.MeshBasicMaterial({
+      map: texGlowInferior, color: this._colorLuzInferior, transparent: true,
+      opacity: this._opacidadGlowInferiorBase,
+      blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false,
+    });
+    this._discoGlowInferior = new THREE.Mesh(geoGlowInferior, matGlowInferior);
+    this._discoGlowInferior.position.y = pisoHueco + 0.01;
+    this._grupoTablero.add(this._discoGlowInferior);
+
+    this._intensidadLuzInferiorBase = 2.4;
     if (!this.luzInferior) {
-      this.luzInferior = new THREE.PointLight(colorLuz, 2.4, 22, 2);
+      this.luzInferior = new THREE.PointLight(this._colorLuzInferior, this._intensidadLuzInferiorBase, 22, 2);
       this.escena.add(this.luzInferior);
+    } else {
+      this.luzInferior.color.set(this._colorLuzInferior);
     }
     this.luzInferior.position.set(0, (techoHueco + pisoHueco) / 2, 0);
 
@@ -245,20 +315,29 @@ class Ajedrez2Tablero3D {
     this._piezasColocadas = null;
   }
 
+  setColorLuzInferior(hex) {
+    this._colorLuzInferior = hex;
+    if (this.luzInferior) this.luzInferior.color.set(hex);
+    if (this._discoGlowInferior) this._discoGlowInferior.material.color.set(hex);
+    if (this._tirasSolidasInferior) this._tirasSolidasInferior.forEach((t) => t.material.color.set(hex));
+  }
+
   cambiarTablero(tipoTablero) { this._crearTableroBase(tipoTablero); this._recolocarSiHabia(); }
   _recolocarSiHabia() { if (this._piezasColocadas) this.colocarPersonajes(this._piezasColocadas); }
 
   _mundoDesdeCasilla(x, y) { return [x - 3.5, y - 3.5]; }
 
-  // `lista`: [{ id:'medievalKnight', x, y, equipo:'blanco'|'negro' }, ...]
+  // `lista`: [{ id:'medievalKnight', x, y, equipo:'blanco'|'negro', altura, rol }, ...]
   // — showroom, no motor de reglas todavía: sólo pone cada personaje en su
-  // casilla, escalado a un alto razonable de ficha, con un disco de color
-  // bajo los pies marcando el equipo (el modelo en sí no se retiñe — son
-  // texturas pintadas a mano, cambiarles el color a lo bruto se ve mal).
+  // casilla, con un disco de color bajo los pies marcando el equipo (el
+  // modelo en sí no se retiñe — son texturas pintadas a mano, cambiarles
+  // el color a lo bruto se ve mal). `altura` es opcional (por defecto
+  // ALTURA_DEFECTO): cada pieza puede pedir su propio porte — torres más
+  // imponentes, peones más chicos — en vez de que todas midan lo mismo.
   colocarPersonajes(lista) {
     this._piezasColocadas = lista;
     this._grupoPiezas.clear();
-    const ALTURA_OBJETIVO = 0.85;
+    const ALTURA_DEFECTO = 1.05;
 
     const porId = {};
     lista.forEach((p) => { (porId[p.id] = porId[p.id] || []).push(p); });
@@ -267,13 +346,18 @@ class Ajedrez2Tablero3D {
       window.cargarPersonajeGLTF(id, (gltf) => {
         const caja = new THREE.Box3().setFromObject(gltf.scene);
         const alto = caja.max.y - caja.min.y || 1;
-        const escala = ALTURA_OBJETIVO / alto;
         const centroX = (caja.max.x + caja.min.x) / 2;
         const pisoY = caja.min.y;
 
         porId[id].forEach((p) => {
+          const escala = (p.altura || ALTURA_DEFECTO) / alto;
           const modelo = gltf.scene.clone(true);
-          modelo.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          modelo.traverse((o) => {
+            if (o.isMesh) {
+              o.castShadow = true; o.receiveShadow = true;
+              o.userData.piezaInfo = { id, x: p.x, y: p.y, equipo: p.equipo, rol: p.rol };
+            }
+          });
           const grupo = new THREE.Group();
           modelo.position.set(-centroX, -pisoY, 0);
           grupo.add(modelo);
@@ -282,6 +366,13 @@ class Ajedrez2Tablero3D {
           const [wx, wz] = this._mundoDesdeCasilla(p.x, p.y);
           grupo.position.set(wx, 0, wz);
           if (p.equipo === "negro") grupo.rotation.y = Math.PI;
+          // Corrección de orientación por personaje: cada .fbx de origen
+          // trae su propio "frente" (no todos los exports de Tripo3D usan
+          // la misma convención), así que algunos quedan de costado en vez
+          // de mirar al frente con la lógica de arriba sola — `giroExtra`
+          // (grados) es ese ajuste, medido a mano personaje por personaje.
+          if (p.giroExtra) grupo.rotation.y += (p.giroExtra * Math.PI) / 180;
+          grupo.userData.piezaInfo = { id, x: p.x, y: p.y, equipo: p.equipo, rol: p.rol };
           this._grupoPiezas.add(grupo);
 
           const colorEquipo = p.equipo === "negro" ? 0x1a1512 : 0xf0e6cf;
@@ -300,20 +391,50 @@ class Ajedrez2Tablero3D {
     });
   }
 
+  // Click sobre una pieza → onPiezaClick(info, id) con la misma `info` que
+  // se guardó en colocarPersonajes (x,y,equipo,rol) y el id del personaje
+  // (para poder recargar su GLTF en el modal de inspección 360°).
+  onPiezaClick(cb) { this._onPiezaClick = cb; }
+
+  _piezaBajoPuntero(e) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this._puntero.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    this._puntero.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    this._raycaster.setFromCamera(this._puntero, this.camara);
+    const hits = this._raycaster.intersectObjects(this._grupoPiezas.children, true);
+    for (const h of hits) {
+      let o = h.object;
+      while (o && !o.userData.piezaInfo) o = o.parent;
+      if (o) return o.userData.piezaInfo;
+    }
+    return null;
+  }
+
   _eventos() {
     const dom = this.renderer.domElement;
     dom.addEventListener("pointerdown", (e) => {
       this._arrastrando = true;
+      this._movio = false;
+      this._inicioArrastre = { x: e.clientX, y: e.clientY };
       this._ultimoPuntero = { x: e.clientX, y: e.clientY };
     });
     window.addEventListener("pointerup", () => { this._arrastrando = false; });
     window.addEventListener("pointermove", (e) => {
       if (!this._arrastrando) return;
-      const dx = e.clientX - this._ultimoPuntero.x;
-      const dy = e.clientY - this._ultimoPuntero.y;
-      this._azimut = Math.min(1.15, Math.max(-1.15, this._azimut - dx * 0.006));
-      this._elevacion = Math.min(1.35, Math.max(0.55, this._elevacion - dy * 0.004));
+      const distTotal = Math.abs(e.clientX - this._inicioArrastre.x) + Math.abs(e.clientY - this._inicioArrastre.y);
+      if (distTotal > 6) {
+        this._movio = true;
+        const dx = e.clientX - this._ultimoPuntero.x;
+        const dy = e.clientY - this._ultimoPuntero.y;
+        this._azimut = Math.min(1.15, Math.max(-1.15, this._azimut - dx * 0.006));
+        this._elevacion = Math.min(1.35, Math.max(0.55, this._elevacion - dy * 0.004));
+      }
       this._ultimoPuntero = { x: e.clientX, y: e.clientY };
+    });
+    dom.addEventListener("click", (e) => {
+      if (this._movio) return;
+      const info = this._piezaBajoPuntero(e);
+      if (info && this._onPiezaClick) this._onPiezaClick(info);
     });
     dom.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -333,6 +454,12 @@ class Ajedrez2Tablero3D {
     requestAnimationFrame(this._loop);
     this._tiempo = t * 0.001;
 
+    if (this.luzInferior) {
+      const p = Math.sin(this._tiempo * 3.1) * 0.22 + Math.sin(this._tiempo * 11.3) * 0.1;
+      this.luzInferior.intensity = this._intensidadLuzInferiorBase + p * (this._intensidadLuzInferiorBase / 2.8);
+      if (this._discoGlowInferior) this._discoGlowInferior.material.opacity = Math.max(0.5, this._opacidadGlowInferiorBase + p * 0.12);
+    }
+
     const r = this._distancia;
     const cx = r * Math.sin(this._elevacion) * Math.sin(this._azimut);
     const cz = r * Math.sin(this._elevacion) * Math.cos(this._azimut);
@@ -347,6 +474,141 @@ class Ajedrez2Tablero3D {
       this._grupoTablero.visible = true;
     }
 
+    this.renderer.render(this.escena, this.camara);
+  }
+
+  dispose() {
+    this.renderer.dispose();
+    if (this.renderer.domElement.parentNode) this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+  }
+}
+
+// ============ Visor de inspección 360° (drawer lateral) ============
+// Escena chica aparte, propia, sin tablero ni pedestal: sólo el personaje
+// girando sobre un pedestal simple con luz de estudio — mismo esquema de
+// cámara orbital manual (arrastrar/rueda) que el resto de la casa, para
+// que se sienta consistente.
+class AjedrezInspector3D {
+  constructor(contenedor) {
+    this.contenedor = contenedor;
+    this.escena = new THREE.Scene();
+    this.escena.background = new THREE.Color(0x0a0a0c);
+    this.camara = new THREE.PerspectiveCamera(40, 1, 0.05, 50);
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    contenedor.appendChild(this.renderer.domElement);
+
+    this.escena.add(new THREE.HemisphereLight(0x9aa6c8, 0x0a0806, 0.55));
+    const key = new THREE.DirectionalLight(0xfff2d8, 1.7);
+    key.position.set(-3, 4, 3);
+    this.escena.add(key);
+    const rim = new THREE.DirectionalLight(0xbfd4ff, 1.3);
+    rim.position.set(2, 2, -4);
+    this.escena.add(rim);
+
+    // Foco cenital, como el de una vitrina de museo: un haz nítido cayendo
+    // derecho de arriba sobre la pieza — pedido explícito ("luz de arriba
+    // como si fuese una vitrina de colección"). Cono angosto + penumbra
+    // baja para que se note como un haz definido, no una luz ambiente más.
+    this.focoVitrina = new THREE.SpotLight(0xf5f2ea, 40, 9, Math.PI / 7, 0.4, 1.1);
+    this.focoVitrina.position.set(0, 4.2, 0.3);
+    this.focoVitrina.target.position.set(0, 0.8, 0);
+    this.focoVitrina.castShadow = true;
+    this.focoVitrina.shadow.mapSize.set(1024, 1024);
+    this.focoVitrina.shadow.camera.near = 1;
+    this.focoVitrina.shadow.camera.far = 8;
+    this.focoVitrina.shadow.bias = -0.0015;
+    this.escena.add(this.focoVitrina, this.focoVitrina.target);
+
+    const pedestalGeo = new THREE.CylinderGeometry(0.9, 1, 0.15, 40);
+    const pedestalMat = new THREE.MeshStandardMaterial({ color: 0x1c1a16, roughness: 0.5, metalness: 0.3 });
+    this.pedestal = new THREE.Mesh(pedestalGeo, pedestalMat);
+    this.pedestal.position.y = -0.075;
+    this.pedestal.receiveShadow = true;
+    this.escena.add(this.pedestal);
+
+    this._grupo = new THREE.Group();
+    this.escena.add(this._grupo);
+
+    this._azimut = 0.4;
+    this._elevacion = 1.0;
+    this._distancia = 3;
+    this._zoomMin = 1.4;
+    this._zoomMax = 7;
+    this._autoRotar = true;
+    this._arrastrando = false;
+    this._ultimoPuntero = { x: 0, y: 0 };
+
+    this._eventos();
+    this._loop = this._loop.bind(this);
+    requestAnimationFrame(this._loop);
+    this.resize();
+    window.addEventListener("resize", () => this.resize());
+  }
+
+  mostrar(id) {
+    this._grupo.clear();
+    window.cargarPersonajeGLTF(id, (gltf) => {
+      const modelo = gltf.scene.clone(true);
+      modelo.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      const caja = new THREE.Box3().setFromObject(modelo);
+      const size = new THREE.Vector3(); caja.getSize(size);
+      const center = new THREE.Vector3(); caja.getCenter(center);
+      const escala = 1.7 / (size.y || 1);
+      modelo.position.set(-center.x, -caja.min.y, -center.z);
+      modelo.scale.setScalar(1);
+      const envoltura = new THREE.Group();
+      envoltura.add(modelo);
+      envoltura.scale.setScalar(escala);
+      this._grupo.add(envoltura);
+      this._distancia = 3;
+      this._autoRotar = true;
+    }, (err) => console.error("No se pudo cargar el personaje para inspección: " + id, err));
+  }
+
+  _eventos() {
+    const dom = this.renderer.domElement;
+    dom.addEventListener("pointerdown", (e) => {
+      this._arrastrando = true;
+      this._autoRotar = false;
+      this._ultimoPuntero = { x: e.clientX, y: e.clientY };
+    });
+    window.addEventListener("pointerup", () => { this._arrastrando = false; });
+    window.addEventListener("pointermove", (e) => {
+      if (!this._arrastrando) return;
+      const dx = e.clientX - this._ultimoPuntero.x;
+      const dy = e.clientY - this._ultimoPuntero.y;
+      this._azimut -= dx * 0.007;
+      this._elevacion = Math.min(1.5, Math.max(0.35, this._elevacion - dy * 0.005));
+      this._ultimoPuntero = { x: e.clientX, y: e.clientY };
+    });
+    dom.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      this._distancia = Math.min(this._zoomMax, Math.max(this._zoomMin, this._distancia + e.deltaY * 0.003));
+    }, { passive: false });
+  }
+
+  resize() {
+    const w = this.contenedor.clientWidth || 320;
+    const h = this.contenedor.clientHeight || 320;
+    this.renderer.setSize(w, h, false);
+    this.camara.aspect = w / h;
+    this.camara.updateProjectionMatrix();
+  }
+
+  _loop(t) {
+    requestAnimationFrame(this._loop);
+    if (this._autoRotar) this._azimut += 0.0035;
+    const r = this._distancia;
+    const cx = r * Math.sin(this._elevacion) * Math.sin(this._azimut);
+    const cz = r * Math.sin(this._elevacion) * Math.cos(this._azimut);
+    const cy = r * Math.cos(this._elevacion);
+    this.camara.position.set(cx, cy, cz);
+    this.camara.lookAt(0, 0.85, 0);
     this.renderer.render(this.escena, this.camara);
   }
 

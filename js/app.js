@@ -1824,32 +1824,55 @@ function sonidoConquistaTeg() {
 // "ejército" de las dos filas de atrás, sólo para ver cómo se ve un
 // tablero lleno de verdad.
 let tablero3dAjedrez2 = null;
+let inspectorAjedrez2 = null;
 let tableroAjedrez2Activo = "rojoNegro";
 
-// Roles asignados por el usuario hasta ahora (sólo bando negro): Reina,
-// Rey, las dos Torres y los dos Alfiles. Caballos y peones de negras, y
-// todo el bando blanco, siguen sin asignar — como placeholder ahí sigue
-// parado el único personaje ya listo antes de estos cuatro
-// (medievalKnight), para que el tablero no se vea vacío de ese lado
-// mientras se decide.
+// Alto objetivo por rol (unidades de escena, 1 = una casilla): pedido
+// explícito — "quiero que las fichas sean más grandes, las torres tengan
+// mayor tamaño, los peones son más pequeños, así cada uno tiene diferente
+// imponencia". Nada de esto es realista-a-escala (un rey de verdad no le
+// saca dos cabezas a un peón) — es la misma licencia visual de "peso
+// jerárquico" que ya usan los sets de ajedrez de diseño.
+const ALTURA_ROL_AJEDREZ2 = { rey: 1.35, reina: 1.28, torre: 1.30, alfil: 1.12, caballo: 1.08, peon: 0.85 };
+const NOMBRE_ROL_AJEDREZ2 = { rey: "Rey", reina: "Reina", torre: "Torre", alfil: "Alfil", caballo: "Caballo", peon: "Peón" };
+// No todos los .fbx de origen traen el mismo "frente" — comprobado a mano,
+// plantando 4 copias de cada uno girada 0/90/180/270 una al lado de la
+// otra y mirando cuál queda de frente a la cámara en vez de de costado.
+const GIRO_EXTRA_PERSONAJE = { reinaBlanca: 180, alfilNegro: 180, peonBlanco: 90 };
+
+// Roster completo de blancas (los 6 roles ya asignados) y de negras salvo
+// los caballos, todavía sin declarar por el usuario — esas dos casillas
+// (b8/g8) quedan vacías en vez de rellenas con un placeholder, para no
+// confundir "esto ya está decidido" con "esto todavía no".
 function formacionVidrieraAjedrez2() {
   const filas = [];
-  for (let x = 0; x < 8; x++) filas.push({ id: "medievalKnight", x, y: 0, equipo: "blanco" });
+  const fila = (y, equipo, cols) => {
+    cols.forEach(([x, rol, id]) => {
+      if (!id) return; // casilla sin personaje asignado todavía (caballos negros)
+      filas.push({ id, x, y, equipo, rol, altura: ALTURA_ROL_AJEDREZ2[rol], giroExtra: GIRO_EXTRA_PERSONAJE[id] });
+    });
+  };
+  fila(0, "blanco", [
+    [0, "torre", "torreBlanca"], [1, "caballo", "caballoBlanco"], [2, "alfil", "alfilBlanco"],
+    [3, "reina", "reinaBlanca"], [4, "rey", "reyBlanco"], [5, "alfil", "alfilBlanco"],
+    [6, "caballo", "caballoBlanco"], [7, "torre", "torreBlanca"],
+  ]);
+  for (let x = 0; x < 8; x++) filas.push({ id: "peonBlanco", x, y: 1, equipo: "blanco", rol: "peon", altura: ALTURA_ROL_AJEDREZ2.peon, giroExtra: GIRO_EXTRA_PERSONAJE.peonBlanco });
 
-  // fila de atrás de negras, posiciones estándar de ajedrez (a8..h8):
-  // torre, caballo(?), alfil, reina, rey, alfil, caballo(?), torre.
-  filas.push({ id: "torreNegra", x: 0, y: 7, equipo: "negro" });
-  filas.push({ id: "alfilNegro", x: 2, y: 7, equipo: "negro" });
-  filas.push({ id: "reinaNegra", x: 3, y: 7, equipo: "negro" });
-  filas.push({ id: "reyNegro", x: 4, y: 7, equipo: "negro" });
-  filas.push({ id: "alfilNegro", x: 5, y: 7, equipo: "negro" });
-  filas.push({ id: "torreNegra", x: 7, y: 7, equipo: "negro" });
+  fila(7, "negro", [
+    [0, "torre", "torreNegra"], [1, "caballo", "caballoNegro"], [2, "alfil", "alfilNegro"],
+    [3, "reina", "reinaNegra"], [4, "rey", "reyNegro"], [5, "alfil", "alfilNegro"],
+    [6, "caballo", "caballoNegro"], [7, "torre", "torreNegra"],
+  ]);
+  for (let x = 0; x < 8; x++) filas.push({ id: "peonNegro", x, y: 6, equipo: "negro", rol: "peon", altura: ALTURA_ROL_AJEDREZ2.peon, giroExtra: GIRO_EXTRA_PERSONAJE.peonNegro });
+
   return filas;
 }
 
 function inicializarTablero3dAjedrez2() {
   if (tablero3dAjedrez2) return;
   tablero3dAjedrez2 = new Ajedrez2Tablero3D($("#tablero-ajedrez2-madera"));
+  tablero3dAjedrez2.onPiezaClick((info) => abrirInspectorAjedrez2(info));
 }
 
 function abrirAjedrez2() {
@@ -1866,6 +1889,7 @@ $("#btn-volver-ajedrez2").addEventListener("click", () => {
   $("#vista-ajedrez2").classList.add("oculto");
   $("#vista-juegos").classList.remove("oculto");
   document.body.classList.add("menu-fondo");
+  cerrarInspectorAjedrez2();
 });
 
 $("#seg-tablero-ajedrez2").addEventListener("click", (e) => {
@@ -1885,4 +1909,36 @@ $("#btn-pantalla-completa-ajedrez2").addEventListener("click", () => {
 });
 document.addEventListener("fullscreenchange", () => {
   if (tablero3dAjedrez2) setTimeout(() => tablero3dAjedrez2.resize(), 60);
+  if (inspectorAjedrez2) setTimeout(() => inspectorAjedrez2.resize(), 60);
 });
+
+// ---------------- inspección 360° de una pieza (drawer lateral) ----------------
+const NOMBRE_PIEZA_AJEDREZ2 = {
+  torreBlanca: "el señor demonio", caballoBlanco: "el inquisidor carmesí", alfilBlanco: "el ángel caído en llamas",
+  reinaBlanca: "la caballero medusa", reyBlanco: "el archángel corrupto", peonBlanco: "la armadura oxidada",
+  torreNegra: "el señor demonio", alfilNegro: "el ángel caído demoníaco", reinaNegra: "la hechicera oscura",
+  reyNegro: "el rey corrupto", peonNegro: "el asesino regicida", caballoNegro: "el centauro guerrero",
+  medievalKnight: "el caballero medieval",
+};
+
+function abrirInspectorAjedrez2(info) {
+  const drawer = $("#ajedrez2-inspector-drawer");
+  drawer.classList.remove("cerrado");
+  const equipoTxt = info.equipo === "negro" ? "negras" : "blancas";
+  const rolTxt = NOMBRE_ROL_AJEDREZ2[info.rol] || "";
+  $("#ajedrez2-inspector-titulo").textContent = `${rolTxt} — ${equipoTxt}`.trim();
+  $("#ajedrez2-inspector-sub").textContent = NOMBRE_PIEZA_AJEDREZ2[info.id] || info.id;
+
+  if (!inspectorAjedrez2) {
+    inspectorAjedrez2 = new AjedrezInspector3D($("#ajedrez2-inspector-canvas"));
+  }
+  setTimeout(() => inspectorAjedrez2.resize(), 10); // el drawer recién ahora tiene ancho real (transición CSS)
+  inspectorAjedrez2.mostrar(info.id);
+  if (tablero3dAjedrez2) setTimeout(() => tablero3dAjedrez2.resize(), 350);
+}
+
+function cerrarInspectorAjedrez2() {
+  $("#ajedrez2-inspector-drawer").classList.add("cerrado");
+  if (tablero3dAjedrez2) setTimeout(() => tablero3dAjedrez2.resize(), 350);
+}
+$("#ajedrez2-inspector-cerrar").addEventListener("click", cerrarInspectorAjedrez2);

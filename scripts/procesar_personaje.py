@@ -82,11 +82,19 @@ def _cargar_fbx(ruta):
     base_dir = os.path.dirname(os.path.abspath(ruta))
     ruta_imagen = os.path.join(base_dir, ruta_difusa)
     if not os.path.isfile(ruta_imagen):
-        objetivo = os.path.basename(ruta_difusa).lower()
+        # a veces ni el nombre completo coincide: el FBX referencia un
+        # ".jpg" y el archivo real que vino en el .zip es ".jpeg" (mismo
+        # nombre, otra extensión) — se compara por nombre SIN extensión.
+        objetivo = os.path.splitext(os.path.basename(ruta_difusa))[0].lower()
         encontrada = None
-        for raiz, _dirs, archivos in os.walk(base_dir):
+        # buscar desde un nivel arriba de la carpeta del .fbx, no sólo
+        # adentro de ella: algunos .zip traen "source/modelo.fbx" y
+        # "textures/..." como carpetas HERMANAS (no una adentro de la
+        # otra), así que buscar sólo dentro de "source/" no la encuentra.
+        raiz_busqueda = os.path.dirname(base_dir) or base_dir
+        for raiz, _dirs, archivos in os.walk(raiz_busqueda):
             for a in archivos:
-                if a.lower() == objetivo:
+                if os.path.splitext(a)[0].lower() == objetivo:
                     encontrada = os.path.join(raiz, a)
                     break
             if encontrada:

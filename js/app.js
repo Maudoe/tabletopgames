@@ -43,6 +43,7 @@ $$(".tarjeta-juego").forEach((tarjeta) => {
     if (juego === "go") abrirModalGo();
     else if (juego === "ajedrez") abrirModalAjedrez();
     else if (juego === "teg") abrirModalTeg();
+    else if (juego === "damas") abrirModalDamas();
     else abrirModalPronto(juego);
   });
 });
@@ -124,9 +125,7 @@ function actualizarToggleNoResign() {
 }
 
 // ---------------- modal: juego "muy pronto" ----------------
-const NOMBRES_PRONTO = {
-  damas: { icono: "⛃", titulo: "Damas", desc: "Falta terminar la captura obligatoria y las coronas. Mientras tanto, jugá una partida de Go o Ajedrez." },
-};
+const NOMBRES_PRONTO = {};
 function abrirModalPronto(juego) {
   const info = NOMBRES_PRONTO[juego];
   $("#pronto-icono").textContent = info.icono;
@@ -212,11 +211,13 @@ document.addEventListener("fullscreenchange", () => {
   $("#btn-pantalla-completa").textContent = texto;
   $("#btn-pantalla-completa-ajedrez").textContent = texto;
   $("#btn-pantalla-completa-teg").textContent = texto;
+  $("#btn-pantalla-completa-damas").textContent = texto;
   document.documentElement.classList.toggle("pantalla-completa", enPantallaCompleta);
   // el contenedor cambia de tamaño al entrar/salir: el canvas de Three.js
   // (o el mapa de Leaflet) no se entera solo, hay que avisarle.
   if (tablero3d) setTimeout(() => tablero3d.resize(), 60);
   if (tablero3dAjedrez) setTimeout(() => tablero3dAjedrez.resize(), 60);
+  if (tablero3dDamas) setTimeout(() => tablero3dDamas.resize(), 60);
   if (mapaTeg) setTimeout(() => mapaTeg.resize(), 60);
 });
 $("#resultado-volver").addEventListener("click", () => {
@@ -227,6 +228,9 @@ $("#resultado-volver").addEventListener("click", () => {
   } else if (juegoActivo === "teg") {
     $("#vista-tablero-teg").classList.add("oculto");
     partidaTeg = null;
+  } else if (juegoActivo === "damas") {
+    $("#vista-tablero-damas").classList.add("oculto");
+    partidaDamas = null;
   } else {
     $("#vista-tablero").classList.add("oculto");
     partida = null;
@@ -238,6 +242,7 @@ $("#resultado-nueva").addEventListener("click", () => {
   $("#modal-resultado").classList.remove("abierto");
   if (juegoActivo === "ajedrez") abrirModalAjedrez();
   else if (juegoActivo === "teg") abrirModalTeg();
+  else if (juegoActivo === "damas") abrirModalDamas();
   else abrirModalGo();
 });
 $("#modal-resultado-cerrar").addEventListener("click", () => $("#modal-resultado").classList.remove("abierto"));
@@ -1042,6 +1047,372 @@ function sonidoFichaAjedrez(esCaptura) {
     osc.start(t0); osc.stop(t0 + 0.1);
   }
 }
+
+// ================================================================
+// DAMAS — motor de reglas (js/damas.js) + tablero 3D (js/damas3d.js)
+// ================================================================
+// Mismo patrón que Ajedrez, con dos diferencias por la captura obligatoria
+// encadenada: alClickCasillaDamas() no limpia la selección después de un
+// movimiento si la jugada devuelve `cadena:true` (hay que seguir comiendo
+// con la misma ficha, el turno todavía no pasó), y turnoBotDamasSiCorresponde
+// se llama de nuevo después de cada jugada del bot por si a él también le
+// toca seguir la cadena.
+const NIVELES_DAMAS = [
+  "Nivel 1 · principiante", "Nivel 2", "Nivel 3", "Nivel 4", "Nivel 5",
+  "Nivel 6", "Nivel 7", "Nivel 8", "Nivel 9 · MAX",
+];
+
+const formDamas = {
+  rival: "bot",
+  nivel: 1,
+  color: "blanco",
+  noresign: false,
+  colorBlancas: "blanco",
+  colorNegras: "negro",
+  tablero: "clasico",
+  luz: "azul",
+};
+
+function abrirModalDamas() { $("#modal-damas").classList.add("abierto"); }
+function cerrarModalDamas() { $("#modal-damas").classList.remove("abierto"); }
+$("#modal-damas-cerrar").addEventListener("click", cerrarModalDamas);
+$("#modal-damas").addEventListener("click", (e) => { if (e.target.id === "modal-damas") cerrarModalDamas(); });
+
+$("#seg-rival-damas").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-rival]");
+  if (!btn) return;
+  formDamas.rival = btn.dataset.rival;
+  $$("#seg-rival-damas button").forEach((b) => b.classList.toggle("activo", b === btn));
+  $("#bloque-nivel-damas").classList.toggle("oculto", formDamas.rival !== "bot");
+  actualizarToggleNoResignDamas();
+});
+
+$("#slider-nivel-damas").addEventListener("input", (e) => {
+  formDamas.nivel = Number(e.target.value);
+  $("#nivel-texto-damas").textContent = NIVELES_DAMAS[formDamas.nivel - 1];
+  const pct = ((formDamas.nivel - 1) / 8) * 100;
+  e.target.style.setProperty("--pct", pct + "%");
+});
+
+$("#seg-color-damas").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-color]");
+  if (!btn) return;
+  formDamas.color = btn.dataset.color;
+  $$("#seg-color-damas button").forEach((b) => b.classList.toggle("activo", b === btn));
+});
+
+$("#toggle-noresign-damas").addEventListener("change", (e) => { formDamas.noresign = e.target.checked; });
+function actualizarToggleNoResignDamas() {
+  const fila = $("#toggle-noresign-damas").closest(".campo-fila");
+  fila.classList.toggle("oculto", formDamas.rival !== "bot");
+}
+
+// ---------------- partida ----------------
+let partidaDamas = null;
+let miColorDamas = BLANCO;
+let esFreePlayDamas = false;
+let noresignActivoDamas = false;
+let skillBotDamas = 0.6;
+let colorBlancasActivoDamas = "blanco";
+let colorNegrasActivoDamas = "negro";
+let esperandoBotDamas = false;
+let seleccionDamas = null;
+let legalesDamas = [];
+
+let tablero3dDamas = null;
+
+$("#btn-jugar-damas").addEventListener("click", () => {
+  juegoActivo = "damas";
+  partidaDamas = new Damas();
+
+  esFreePlayDamas = formDamas.rival === "libre";
+  noresignActivoDamas = formDamas.noresign;
+  skillBotDamas = (formDamas.nivel - 1) / 8;
+  seleccionDamas = null;
+  legalesDamas = [];
+
+  if (formDamas.color === "nigiri") miColorDamas = Math.random() < 0.5 ? BLANCO : NEGRO;
+  else miColorDamas = formDamas.color === "blanco" ? BLANCO : NEGRO;
+
+  cerrarModalDamas();
+  $("#vista-juegos").classList.add("oculto");
+  $("#vista-tablero-damas").classList.remove("oculto");
+  $("#modal-resultado").classList.remove("abierto");
+  document.body.classList.remove("menu-fondo");
+  $("#btn-rendirse-damas").disabled = false;
+
+  colorBlancasActivoDamas = formDamas.colorBlancas;
+  colorNegrasActivoDamas = formDamas.colorNegras;
+
+  inicializarTablero3dDamas();
+  tablero3dDamas.cambiarTablero(formDamas.tablero);
+  tablero3dDamas.setColorLuzInferior(PALETA_LUCES_INFERIOR[formDamas.luz].color);
+  dibujarTableroDamas();
+  actualizarPanelDamas();
+  turnoBotDamasSiCorresponde();
+});
+
+$("#btn-volver-damas").addEventListener("click", () => {
+  $("#vista-tablero-damas").classList.add("oculto");
+  $("#vista-juegos").classList.remove("oculto");
+  $("#modal-resultado").classList.remove("abierto");
+  document.body.classList.add("menu-fondo");
+  partidaDamas = null;
+});
+$("#btn-nueva-damas").addEventListener("click", () => abrirModalDamas());
+
+$("#btn-pantalla-completa-damas").addEventListener("click", () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
+});
+
+$("#btn-rendirse-damas").addEventListener("click", () => {
+  if (!partidaDamas || partidaDamas.terminado) return;
+  if (!esFreePlayDamas && !esperandoBotDamas) {
+    partidaDamas.rendirse(miColorDamas);
+  } else if (esFreePlayDamas) {
+    partidaDamas.rendirse(partidaDamas.turno);
+  } else {
+    return; // no se puede rendir en medio del turno del bot
+  }
+  seleccionDamas = null; legalesDamas = [];
+  dibujarTableroDamas();
+  actualizarPanelDamas();
+});
+
+function esTurnoDelHumanoDamas() {
+  if (esFreePlayDamas) return true;
+  return partidaDamas.turno === miColorDamas;
+}
+
+function turnoBotDamasSiCorresponde() {
+  if (!partidaDamas || partidaDamas.terminado || esFreePlayDamas) return;
+  if (partidaDamas.turno === miColorDamas) return;
+  esperandoBotDamas = true;
+  $("#btn-rendirse-damas").disabled = true;
+  actualizarPanelDamas();
+  (async () => {
+    if (!partidaDamas || partidaDamas.terminado) { esperandoBotDamas = false; return; }
+    const colorBot = partidaDamas.turno;
+    if (!partidaDamas.capturaObligada && !noresignActivoDamas && botDeberiaRendirseDamas(partidaDamas, colorBot, skillBotDamas)) {
+      partidaDamas.rendirse(colorBot);
+      esperandoBotDamas = false;
+      $("#btn-rendirse-damas").disabled = false;
+      dibujarTableroDamas();
+      actualizarPanelDamas();
+      return;
+    }
+    const jugada = await conTechoDeTiempo(
+      jugadaDelDamas(partidaDamas, colorBot, skillBotDamas),
+      presupuestoPensadaMs(skillBotDamas) + 2000,
+      () => jugadaDelDamas(partidaDamas, colorBot, 0)
+    );
+    if (jugada) {
+      const r = partidaDamas.mover(jugada.desde, jugada.hasta);
+      if (r.ok) sonidoFichaAjedrez(r.comida);
+    }
+    dibujarTableroDamas();
+    actualizarPanelDamas();
+    // ¿el bot tiene que seguir comiendo con la misma ficha? seguimos en su
+    // turno — si no, esperandoBotDamas se apaga y vuelve a ser turno humano.
+    if (partidaDamas.capturaObligada && partidaDamas.turno === colorBot && !partidaDamas.terminado) {
+      turnoBotDamasSiCorresponde();
+    } else {
+      esperandoBotDamas = false;
+      $("#btn-rendirse-damas").disabled = false;
+    }
+  })();
+}
+
+function alClickCasillaDamas(x, y) {
+  if (!partidaDamas || partidaDamas.terminado) return;
+  if (esperandoBotDamas) return;
+  if (!esTurnoDelHumanoDamas()) return;
+
+  const pieza = partidaDamas.pieza(x, y);
+
+  if (seleccionDamas) {
+    if (!partidaDamas.capturaObligada && seleccionDamas.x === x && seleccionDamas.y === y) {
+      seleccionDamas = null; legalesDamas = [];
+      dibujarTableroDamas();
+      return;
+    }
+    const destino = legalesDamas.find((m) => m.hasta.x === x && m.hasta.y === y);
+    if (destino) {
+      const r = partidaDamas.mover(seleccionDamas, { x, y });
+      if (r.ok) {
+        sonidoFichaAjedrez(r.comida);
+        if (r.cadena) {
+          // captura encadenada: la misma ficha sigue seleccionada, sólo se
+          // refrescan sus nuevos movimientos legales (todas capturas).
+          seleccionDamas = { x, y };
+          legalesDamas = partidaDamas.movimientosLegales(x, y);
+        } else {
+          seleccionDamas = null; legalesDamas = [];
+        }
+        dibujarTableroDamas();
+        actualizarPanelDamas();
+        if (!r.cadena) turnoBotDamasSiCorresponde();
+      } else {
+        dibujarTableroDamas();
+      }
+      return;
+    }
+  }
+
+  if (!partidaDamas.capturaObligada && pieza && pieza.color === partidaDamas.turno) {
+    seleccionDamas = { x, y };
+    legalesDamas = partidaDamas.movimientosLegales(x, y);
+  } else if (!partidaDamas.capturaObligada) {
+    seleccionDamas = null; legalesDamas = [];
+  }
+  dibujarTableroDamas();
+}
+
+function actualizarPanelDamas() {
+  const piedra = $("#turno-piedra-damas");
+  const texto = $("#turno-texto-damas");
+  if (partidaDamas.terminado) {
+    texto.textContent = "Partida terminada";
+    piedra.style.background = "linear-gradient(135deg, var(--oro-claro), var(--oro-oscuro))";
+  } else {
+    const esBlanco = partidaDamas.turno === BLANCO;
+    piedra.style.background = esBlanco
+      ? "radial-gradient(circle at 35% 30%, #ffffff, #d8cdb4)"
+      : "radial-gradient(circle at 35% 30%, #3a352c, #050403)";
+    const quien = esFreePlayDamas
+      ? (esBlanco ? "Blancas juegan" : "Negras juegan")
+      : (partidaDamas.turno === miColorDamas ? "Tu turno" : (esperandoBotDamas ? "El bot está pensando…" : "Turno del bot"));
+    texto.textContent = quien;
+  }
+  $("#cap-blancas-damas").textContent = partidaDamas.capturas[BLANCO];
+  $("#cap-negras-damas").textContent = partidaDamas.capturas[NEGRO];
+  $("#mov-chip-damas").textContent = partidaDamas.movimientos;
+  const pB = partidaDamas.contarPiezas(BLANCO), pN = partidaDamas.contarPiezas(NEGRO);
+  $("#piezas-blancas-damas").textContent = pB.peones + pB.damas;
+  $("#piezas-negras-damas").textContent = pN.peones + pN.damas;
+
+  if (partidaDamas.terminado) {
+    $("#btn-rendirse-damas").disabled = true;
+    mostrarResultadoDamas();
+  }
+}
+
+function mostrarResultadoDamas() {
+  const r = partidaDamas.resultado;
+  const nombreColor = (c) => (c === BLANCO ? "Blancas" : "Negras");
+  let titulo, detalle;
+
+  if (esFreePlayDamas) {
+    titulo = `Ganan las ${nombreColor(r.ganador).toLowerCase()}`;
+    detalle = r.motivo === "sin_movimientos"
+      ? `Las ${nombreColor(otro(r.ganador)).toLowerCase()} se quedaron sin movimientos posibles.`
+      : `Las ${nombreColor(otro(r.ganador)).toLowerCase()} se rindieron.`;
+  } else {
+    titulo = r.ganador === miColorDamas ? "¡Ganaste!" : "Perdiste";
+    const motivoTxt = r.motivo === "sin_movimientos"
+      ? (r.ganador === miColorDamas ? "El bot se quedó sin movimientos." : "Te quedaste sin movimientos.")
+      : (r.ganador === miColorDamas ? "El bot se rindió." : "Te rendiste.");
+    detalle = `${motivoTxt} · Jugaste con ${miColorDamas === BLANCO ? "blancas" : "negras"}`;
+  }
+
+  $("#mensaje-final-titulo").textContent = titulo;
+  $("#mensaje-final-detalle").textContent = detalle;
+  const piedraIcono = $("#resultado-piedra");
+  piedraIcono.style.background = r.ganador === BLANCO
+    ? "radial-gradient(circle at 35% 28%, #ffffff, #eee4cf 60%, #c9bda0 100%)"
+    : "radial-gradient(circle at 35% 28%, #4a453a, #141210 55%, #000 100%)";
+  setTimeout(() => $("#modal-resultado").classList.add("abierto"), 260);
+}
+
+// ================================================================
+// TABLERO — Three.js (ver js/damas3d.js)
+// ================================================================
+function inicializarTablero3dDamas() {
+  if (tablero3dDamas) return;
+  tablero3dDamas = new DamasTablero3D($("#tablero-damas-madera"));
+  tablero3dDamas.onCasilla((x, y) => alClickCasillaDamas(x, y));
+}
+
+function tableroDamasParaVista(damas) {
+  const filas = [];
+  for (let y = 0; y < 8; y++) {
+    const fila = [];
+    for (let x = 0; x < 8; x++) {
+      const p = damas.pieza(x, y);
+      fila.push(p ? { color: p.color === BLANCO ? "blanco" : "negro", dama: p.dama } : null);
+    }
+    filas.push(fila);
+  }
+  return filas;
+}
+
+function dibujarTableroDamas() {
+  const tablero = tableroDamasParaVista(partidaDamas);
+  const legales = legalesDamas.filter((m) => m.tipo !== "captura").map((m) => m.hasta);
+  const capturas = legalesDamas.filter((m) => m.tipo === "captura").map((m) => m.hasta);
+  tablero3dDamas.actualizar(tablero, {
+    seleccion: seleccionDamas,
+    legales, capturas,
+    ultimoMovimiento: partidaDamas.ultimoMovimiento,
+    colorBlanco: colorBlancasActivoDamas,
+    colorNegro: colorNegrasActivoDamas,
+  });
+  tablero3dDamas.resize();
+}
+
+// ---------------- selector de colores de pieza y tipo de tablero ----------------
+function redibujarPreviewDamas() {
+  const cv = $("#preview-tablero-damas");
+  const ctx = cv.getContext("2d");
+  const w = cv.width, h = cv.height;
+  dibujarSwatchTablero(ctx, w, h, PALETA_TABLEROS_DAMAS[formDamas.tablero]);
+
+  const radio = h * 0.16;
+  const y = h * 0.54;
+  const posiciones = [0.14, 0.30, 0.46, 0.62, 0.78, 0.92];
+  posiciones.forEach((fx, i) => {
+    const cfg = PALETA_PIEDRAS[i % 2 === 0 ? formDamas.colorNegras : formDamas.colorBlancas];
+    const cvPieza = document.createElement("canvas");
+    const N = 80;
+    cvPieza.width = cvPieza.height = N;
+    dibujarMarmol(cvPieza.getContext("2d"), N, cfg);
+    const cy = y + (i % 2 === 0 ? -radio * 0.35 : radio * 0.35);
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(w * fx, cy, radio, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(cvPieza, w * fx - radio, cy - radio, radio * 2, radio * 2);
+    ctx.restore();
+  });
+}
+
+construirSwatchesPiedra("swatches-blancas-damas", "colorBlancas", formDamas, redibujarPreviewDamas, "swatch-pieza");
+construirSwatchesPiedra("swatches-negras-damas", "colorNegras", formDamas, redibujarPreviewDamas, "swatch-pieza");
+construirSwatchesTablero("swatches-tablero-damas", formDamas, redibujarPreviewDamas, PALETA_TABLEROS_DAMAS);
+construirSwatchesLuz("swatches-luz-damas", formDamas);
+redibujarPreviewDamas();
+
+$("#slider-nivel-damas").style.setProperty("--pct", "0%");
+actualizarToggleNoResignDamas();
+
+// ---------------- opciones (vista 2D/3D, sonido) ----------------
+$("#btn-opciones-damas").addEventListener("click", () => $("#modal-opciones-damas").classList.add("abierto"));
+$("#modal-opciones-damas-cerrar").addEventListener("click", () => $("#modal-opciones-damas").classList.remove("abierto"));
+$("#modal-opciones-damas").addEventListener("click", (e) => { if (e.target.id === "modal-opciones-damas") $("#modal-opciones-damas").classList.remove("abierto"); });
+
+$("#seg-vista-damas").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-vista]");
+  if (!btn) return;
+  $$("#seg-vista-damas button").forEach((b) => b.classList.toggle("activo", b === btn));
+  if (tablero3dDamas) tablero3dDamas.setVista(btn.dataset.vista);
+});
+// El SFX de damas reusa el mismo sintetizador que ajedrez (sonidoFichaAjedrez
+// — genérico, "ficha que se mueve/come", nada específico de ajedrez) pero
+// con su propio toggle en su propio modal de Opciones.
+$("#toggle-sfx-damas").addEventListener("change", (e) => { sfxActivoAjedrez = e.target.checked; $("#toggle-sfx-ajedrez").checked = e.target.checked; });
 
 // ================================================================
 // TEG — mapa Leaflet (js/tegmapa.js) + motor de reglas (js/teg.js)

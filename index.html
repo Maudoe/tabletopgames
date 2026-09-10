@@ -82,7 +82,6 @@
           <span class="fondo"></span>
           <span class="icono">⛃</span>
           <span class="velo"></span>
-          <span class="pronto-badge">Muy pronto</span>
           <span class="cuerpo">
             <span class="nombre">Damas</span>
             <span class="desc">Checkers · captura obligatoria, tablero de 8×8</span>
@@ -205,6 +204,38 @@
           </div>
         </aside>
       </div>
+    </section>
+
+    <!-- ---------------- vista: tablero de Damas ---------------- -->
+    <section id="vista-tablero-damas" class="vista vista-tablero oculto">
+      <div class="tablero-cabecera">
+        <div class="tablero-titulo">
+          <button class="btn-volver" id="btn-volver-damas">← Juegos</button>
+          <span class="turno-indicador" id="turno-indicador-damas">
+            <span class="turno-piedra" id="turno-piedra-damas"></span>
+            <span id="turno-texto-damas">Blancas juegan</span>
+          </span>
+        </div>
+        <div class="acciones-tablero">
+          <button class="btn-accion rojo" id="btn-rendirse-damas">Rendirse</button>
+          <button class="btn-accion" id="btn-nueva-damas">Nueva partida</button>
+          <button class="btn-accion" id="btn-opciones-damas">⚙ Opciones</button>
+          <button class="btn-accion" id="btn-pantalla-completa-damas">⛶ Pantalla completa</button>
+        </div>
+      </div>
+
+      <div class="tablero-envoltorio">
+        <div class="tablero-madera" id="tablero-damas-madera"></div>
+      </div>
+
+      <div class="panel-lateral">
+        <div class="info-chip"><div class="num" id="cap-blancas-damas">0</div><div class="etq">Comidas por blancas</div></div>
+        <div class="info-chip"><div class="num" id="cap-negras-damas">0</div><div class="etq">Comidas por negras</div></div>
+        <div class="info-chip"><div class="num" id="piezas-blancas-damas">12</div><div class="etq">Piezas blancas</div></div>
+        <div class="info-chip"><div class="num" id="piezas-negras-damas">12</div><div class="etq">Piezas negras</div></div>
+        <div class="info-chip"><div class="num" id="mov-chip-damas">0</div><div class="etq">Jugadas</div></div>
+      </div>
+
     </section>
 
   </div>
@@ -430,6 +461,104 @@
   </div>
   <audio id="musica-ajedrez"></audio>
 
+  <!-- ---------------- modal: configurar partida de Damas ---------------- -->
+  <div class="modal-fondo" id="modal-damas">
+    <div class="modal">
+      <button class="modal-cerrar" id="modal-damas-cerrar">✕</button>
+
+      <h2 class="modal-titulo serif" style="margin-top:6px;">Damas</h2>
+      <p class="modal-sub">Captura obligatoria y encadenada — llegá a la última fila para coronar.</p>
+
+      <div id="form-damas">
+        <div class="campo-fila" style="margin-top:14px;">
+          <div class="segmentado" id="seg-rival-damas">
+            <button class="activo" data-rival="bot">vs Bot</button>
+            <button data-rival="libre">Free play</button>
+          </div>
+        </div>
+
+        <div id="bloque-nivel-damas">
+          <div class="nivel-linea">✓ <span id="nivel-texto-damas">Nivel 1 · principiante</span> <span class="nivel-badge">🧠 piensa en serio</span></div>
+          <div class="slider-envoltorio">
+            <input type="range" id="slider-nivel-damas" min="1" max="9" value="1" step="1">
+            <div class="slider-etiquetas"><span>Principiante</span><span>más fuerte, tarda un poco más</span><span>MAX</span></div>
+          </div>
+        </div>
+
+        <hr class="separador">
+
+        <div class="campo-fila">
+          <div class="campo-label">Tu color</div>
+          <div class="segmentado" id="seg-color-damas">
+            <button data-color="nigiri">Sorteo</button>
+            <button class="activo" data-color="blanco"><span class="punto-color blanco"></span> Blancas</button>
+            <button data-color="negro"><span class="punto-color negro"></span> Negras</button>
+          </div>
+        </div>
+
+        <hr class="separador">
+
+        <canvas id="preview-tablero-damas" class="preview-tablero" width="320" height="150"></canvas>
+
+        <div class="campo" style="margin-top:16px;">
+          <div class="campo-label">Piezas — Blancas</div>
+          <div class="fila-swatches" id="swatches-blancas-damas"></div>
+        </div>
+        <div class="campo">
+          <div class="campo-label">Piezas — Negras</div>
+          <div class="fila-swatches" id="swatches-negras-damas"></div>
+        </div>
+
+        <div class="campo">
+          <div class="campo-label">Tablero</div>
+          <div class="fila-swatches fila-swatches-tablero" id="swatches-tablero-damas"></div>
+        </div>
+
+        <div class="campo">
+          <div class="campo-label">Luz bajo el tablero</div>
+          <div class="fila-swatches" id="swatches-luz-damas"></div>
+        </div>
+
+        <div class="campo-fila">
+          <div>
+            <div class="campo-label">El bot nunca se rinde</div>
+            <div class="campo-nota">Toda partida termina cuando un color se queda sin movimientos</div>
+          </div>
+          <label class="toggle"><input type="checkbox" id="toggle-noresign-damas"><span class="via"></span></label>
+        </div>
+
+        <button class="btn-jugar" id="btn-jugar-damas">Jugar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------- modal: opciones del tablero de Damas ---------------- -->
+  <div class="modal-fondo" id="modal-opciones-damas">
+    <div class="modal" style="max-width:420px;">
+      <button class="modal-cerrar" id="modal-opciones-damas-cerrar">✕</button>
+      <h2 class="modal-titulo serif" style="margin-top:6px;">Opciones</h2>
+
+      <div class="campo-fila" style="margin-top:14px;">
+        <div class="campo-label">Vista</div>
+        <div class="segmentado" id="seg-vista-damas">
+          <button class="activo" data-vista="3d">Vista 3D</button>
+          <button data-vista="2d">Vista 2D</button>
+        </div>
+      </div>
+
+      <hr class="separador">
+
+      <div class="campo-fila">
+        <div>
+          <div class="campo-label">Efectos de sonido</div>
+          <div class="campo-nota">Al mover o comer una ficha</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="toggle-sfx-damas" checked><span class="via"></span></label>
+      </div>
+      <p class="campo-nota" style="margin-top:14px;">La música se controla desde arriba de todo, en la cabecera de GameHub.</p>
+    </div>
+  </div>
+
   <!-- ---------------- modal: configurar partida de TEG ---------------- -->
   <div class="modal-fondo" id="modal-teg">
     <div class="modal">
@@ -481,11 +610,13 @@
   <script src="js/go.js?v=8"></script>
   <script src="js/gobot.js?v=5"></script>
   <script src="js/chess.js?v=4"></script>
+  <script src="js/damas.js?v=1"></script>
   <script src="js/worldpaises.js?v=1"></script>
   <script src="js/teg.js?v=2"></script>
   <script src="js/board3d.js?v=22"></script>
   <script src="js/chess3d.js?v=20"></script>
+  <script src="js/damas3d.js?v=2"></script>
   <script src="js/tegmapa.js?v=21"></script>
-  <script src="js/app.js?v=25"></script>
+  <script src="js/app.js?v=26"></script>
 </body>
 </html>

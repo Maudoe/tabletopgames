@@ -636,6 +636,16 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
    entero, sin padding ni centrado de por medio. */
 .tablero-envoltorio {
   height: min(78vh, 860px);
+  /* flex:1 + min-width:0 son necesarios cuando este panel vive adentro de
+     un .teg-tablero-fila (Ajedrez 2.0, con el cajón de inspección al
+     costado) — sin esto se quedaba con su ancho intrínseco (chico) en vez
+     de estirarse a ocupar el lugar disponible, y en pantalla completa en
+     un monitor ancho el tablero quedaba con un montón de aire vacío al
+     lado (el mismo problema que .mapa-envoltorio ya resolvía para TEG,
+     acá nunca se había replicado). Fuera de un flex container esto no
+     hace nada, así que es seguro dejarlo puesto siempre.
+  */
+  flex: 1; min-width: 0;
   /* Azul tinta en vez de dorado cálido acá: contra la madera del tablero
      (siempre cálida) un fondo frío la hace resaltar en lugar de mezclarse
      en una sola papilla marrón. */
@@ -649,8 +659,6 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
 }
 .pantalla-completa .tablero-envoltorio {
   height: min(88vh, 1500px);
-  max-width: 1700px;
-  margin: 0 auto;
 }
 
 /* El tablero de madera, la grilla y las piedras ahora los dibuja Three.js
@@ -690,8 +698,6 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
 }
 .pantalla-completa .teg-tablero-fila {
   height: min(88vh, 1500px);
-  max-width: 1700px;
-  margin: 0 auto;
 }
 .pantalla-completa .mapa-envoltorio { height: 100%; }
 /* El mapa (canvas Three.js) lo inserta tegmapa.js acá adentro — mismo

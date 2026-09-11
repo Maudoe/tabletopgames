@@ -91,9 +91,11 @@ class Ajedrez2Tablero3D {
   // Cuatro antorchas paradas en las cuatro esquinas del tablero (afuera del
   // marco, una por esquina) — pedido explícito del usuario en vez del
   // "subir la luz ambiente en todos lados" que se había probado antes: acá
-  // cada una es una fuente de luz real y cálida, con su propia llama
-  // (sprite aditivo animado) y un PointLight que titila — se nota como
-  // antorcha de verdad, no como más luz de relleno genérica.
+  // cada una es un brasero retorcido con espinas (nada de poste recto — eso
+  // era justo el problema, "parecen linternas") y fuego fantasma violeta
+  // en vez de una llama de campamento normal, más una enredadera espinosa
+  // que sube por el poste y otra que bordea el marco del tablero entero —
+  // pedido explícito: "algo más místico o embrujado como una enredadera".
   _crearAntorchas() {
     this._antorchas = [];
     const mitad = 4 + 0.34; // borde del marco (ver _crearTableroBase)
@@ -102,49 +104,143 @@ class Ajedrez2Tablero3D {
       [-mitad - 0.35, mitad + 0.35], [mitad + 0.35, mitad + 0.35],
     ];
 
+    // fuego fantasma: núcleo blanco-violeta bien chico + halo verde
+    // pantanoso mucho más grande y difuso — la mezcla es lo que lo hace
+    // leer como "fuego embrujado" en vez de una llama común de otro color.
     const cvLlama = document.createElement("canvas");
     cvLlama.width = cvLlama.height = 128;
     const lctx = cvLlama.getContext("2d");
     const gLlama = lctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gLlama.addColorStop(0, "rgba(255,244,200,0.95)");
-    gLlama.addColorStop(0.35, "rgba(255,170,60,0.75)");
-    gLlama.addColorStop(0.75, "rgba(255,90,20,0.28)");
-    gLlama.addColorStop(1, "rgba(255,60,10,0)");
+    gLlama.addColorStop(0, "rgba(238,255,235,0.95)");
+    gLlama.addColorStop(0.28, "rgba(150,255,170,0.8)");
+    gLlama.addColorStop(0.6, "rgba(110,220,140,0.4)");
+    gLlama.addColorStop(1, "rgba(80,190,120,0)");
     lctx.fillStyle = gLlama;
     lctx.fillRect(0, 0, 128, 128);
     const texLlama = new THREE.CanvasTexture(cvLlama);
 
-    const matPoste = new THREE.MeshStandardMaterial({ color: 0x241d16, roughness: 0.75, metalness: 0.25 });
-    const matCuenco = new THREE.MeshStandardMaterial({ color: 0x2e2419, roughness: 0.6, metalness: 0.4 });
+    const matRama = new THREE.MeshStandardMaterial({ color: 0x1c1712, roughness: 0.85, metalness: 0.1 });
+    const matCuenco = new THREE.MeshStandardMaterial({ color: 0x2a231a, roughness: 0.55, metalness: 0.45 });
+    const matHiedra = new THREE.MeshStandardMaterial({ color: 0x1c3320, roughness: 0.8, metalness: 0.05 });
+    const matBaya = new THREE.MeshBasicMaterial({ color: 0x8fe0a0, toneMapped: false });
 
     for (const [ex, ez] of esquinas) {
       const grupo = new THREE.Group();
       grupo.position.set(ex, 0, ez);
 
-      const ALTO_POSTE = 1.55;
-      const poste = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, ALTO_POSTE, 10), matPoste);
-      poste.position.y = ALTO_POSTE / 2;
-      poste.castShadow = true;
-      grupo.add(poste);
+      // rama retorcida: 4 segmentos apilados, cada uno un poco desviado en
+      // ángulo y grosor — no un cilindro recto — así se lee como una rama
+      // nudosa en vez de un poste de linterna.
+      const ALTO_TOTAL = 1.55;
+      const SEGMENTOS = 4;
+      let y = 0, offX = 0, offZ = 0;
+      for (let i = 0; i < SEGMENTOS; i++) {
+        const alto = ALTO_TOTAL / SEGMENTOS;
+        const grosor = 0.075 - i * 0.012;
+        const seg = new THREE.Mesh(new THREE.CylinderGeometry(grosor * 0.8, grosor, alto * 1.08, 8), matRama);
+        const dx = (Math.random() - 0.5) * 0.14, dz = (Math.random() - 0.5) * 0.14;
+        seg.position.set(offX + dx * 0.5, y + alto / 2, offZ + dz * 0.5);
+        seg.rotation.set((Math.random() - 0.5) * 0.35, Math.random() * Math.PI, (Math.random() - 0.5) * 0.35);
+        seg.castShadow = true;
+        grupo.add(seg);
+        offX += dx; offZ += dz; y += alto;
+        // un par de espinas cortas saliendo del segmento
+        for (let s = 0; s < 2; s++) {
+          const espina = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.11, 6), matRama);
+          const ang = Math.random() * Math.PI * 2;
+          espina.position.set(offX + Math.cos(ang) * grosor, y - alto * 0.3, offZ + Math.sin(ang) * grosor);
+          espina.rotation.z = Math.PI / 2 - ang;
+          espina.rotation.x = (Math.random() - 0.5) * 0.6;
+          grupo.add(espina);
+        }
+      }
 
       const cuenco = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.08, 0.14, 12), matCuenco);
-      cuenco.position.y = ALTO_POSTE + 0.02;
+      cuenco.position.set(offX, y + 0.02, offZ);
       grupo.add(cuenco);
 
       const llama = new THREE.Sprite(new THREE.SpriteMaterial({
         map: texLlama, transparent: true, blending: THREE.AdditiveBlending,
-        depthWrite: false, opacity: 0.95, fog: false,
+        depthWrite: false, opacity: 0.9, fog: false,
       }));
-      llama.scale.set(0.55, 0.75, 1);
-      llama.position.y = ALTO_POSTE + 0.22;
+      llama.scale.set(0.5, 0.68, 1);
+      llama.position.set(offX, y + 0.22, offZ);
       grupo.add(llama);
 
-      const luz = new THREE.PointLight(0xff9a3c, 3.2, 9, 1.8);
-      luz.position.y = ALTO_POSTE + 0.25;
+      const luz = new THREE.PointLight(0x7fe89a, 3.0, 9, 1.8);
+      luz.position.set(offX, y + 0.25, offZ);
       grupo.add(luz);
+
+      // hiedra trepando la rama: un puñado de segmentos finos en espiral
+      // alrededor del tronco, con alguna "baya" fosforescente.
+      const vueltas = 2.2;
+      const pasos = 14;
+      for (let i = 0; i < pasos; i++) {
+        const t = i / pasos;
+        const ang = t * Math.PI * 2 * vueltas;
+        const radio = 0.09 + t * 0.02;
+        const hy = t * ALTO_TOTAL * 0.92;
+        const tramo = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.16, 5), matHiedra);
+        tramo.position.set(Math.cos(ang) * radio, hy, Math.sin(ang) * radio);
+        tramo.rotation.set(Math.random() * 0.4, ang, Math.PI / 2.3);
+        grupo.add(tramo);
+        if (i % 4 === 0) {
+          const baya = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), matBaya);
+          baya.position.set(Math.cos(ang) * (radio + 0.04), hy, Math.sin(ang) * (radio + 0.04));
+          grupo.add(baya);
+        }
+      }
 
       this.escena.add(grupo);
       this._antorchas.push({ llama, luz, fase: Math.random() * 10 });
+    }
+
+    this._crearHiedraTablero(mitad);
+  }
+
+  // Enredadera que bordea el marco entero del tablero (no sólo las
+  // esquinas): un tubo orgánico siguiendo el perímetro, con hojas simples
+  // (planos) y bayas fosforescentes salpicadas — el detalle "embrujado"
+  // alrededor de todo el tablero, no sólo en los postes.
+  _crearHiedraTablero(mitad) {
+    const puntos = [];
+    const lado = mitad + 0.12;
+    const esquinasCurva = [
+      [-lado, -lado], [lado, -lado], [lado, lado], [-lado, lado], [-lado, -lado],
+    ];
+    for (let i = 0; i < esquinasCurva.length - 1; i++) {
+      const [x0, z0] = esquinasCurva[i], [x1, z1] = esquinasCurva[i + 1];
+      const pasos = 10;
+      for (let p = 0; p <= pasos; p++) {
+        const t = p / pasos;
+        const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+        const y = 0.04 + Math.sin(t * Math.PI * 3 + i * 1.7) * 0.05 + Math.random() * 0.015;
+        puntos.push(new THREE.Vector3(x, y, z));
+      }
+    }
+    const curva = new THREE.CatmullRomCurve3(puntos, true);
+    const geoTubo = new THREE.TubeGeometry(curva, 220, 0.028, 6, true);
+    const matTubo = new THREE.MeshStandardMaterial({ color: 0x1c3320, roughness: 0.8, metalness: 0.05 });
+    const tubo = new THREE.Mesh(geoTubo, matTubo);
+    tubo.receiveShadow = true;
+    this.escena.add(tubo);
+
+    const matHoja = new THREE.MeshStandardMaterial({ color: 0x2c4a2e, roughness: 0.7, side: THREE.DoubleSide });
+    const matBaya = new THREE.MeshBasicMaterial({ color: 0x8fe0a0, toneMapped: false });
+    const geoHoja = new THREE.SphereGeometry(0.055, 6, 5);
+    geoHoja.scale(1, 0.28, 1.7);
+    for (let i = 0; i < 46; i++) {
+      const t = i / 46;
+      const p = curva.getPointAt(t);
+      const hoja = new THREE.Mesh(geoHoja, matHoja);
+      hoja.position.copy(p).add(new THREE.Vector3((Math.random() - 0.5) * 0.05, 0.02, (Math.random() - 0.5) * 0.05));
+      hoja.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      this.escena.add(hoja);
+      if (i % 5 === 0) {
+        const baya = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 6), matBaya);
+        baya.position.copy(p).add(new THREE.Vector3(0, 0.05, 0));
+        this.escena.add(baya);
+      }
     }
   }
 
@@ -565,7 +661,7 @@ class Ajedrez2Tablero3D {
     if (this._antorchas) {
       for (const a of this._antorchas) {
         const p = Math.sin((this._tiempo + a.fase) * 6.5) * 0.5 + Math.sin((this._tiempo + a.fase) * 17) * 0.25;
-        a.luz.intensity = 3.2 + p;
+        a.luz.intensity = 3.0 + p;
         a.llama.scale.set(0.55 + p * 0.05, 0.75 + p * 0.07, 1);
       }
     }

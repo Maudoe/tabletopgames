@@ -670,7 +670,7 @@ class Tablero3D {
           // limitado a +/-66°: más que eso y la cámara empieza a asomarse por
           // el lado abierto de la habitación (el "cuarto muro" del living,
           // como en una maqueta) y se ve raro desde afuera.
-          this._azimut = Math.min(1.15, Math.max(-1.15, this._azimut - dx * 0.006));
+          this._azimut -= dx * 0.006; // sin límite: se puede dar toda la vuelta, 360°
           this._elevacion = Math.min(1.35, Math.max(0.55, this._elevacion - dy * 0.004));
         }
         this._ultimoPuntero = { x: e.clientX, y: e.clientY };

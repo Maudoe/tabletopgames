@@ -858,7 +858,7 @@ class TegMapa {
         if (dist > 6) {
           this._movio = true;
           const dx = e.clientX - this._ultimoPuntero.x, dy = e.clientY - this._ultimoPuntero.y;
-          this._azimut = Math.min(1.15, Math.max(-1.15, this._azimut - dx * 0.006));
+          this._azimut -= dx * 0.006; // sin límite: se puede dar toda la vuelta, 360°
           this._elevacion = Math.min(1.45, Math.max(0.6, this._elevacion - dy * 0.004));
         }
         this._ultimoPuntero = { x: e.clientX, y: e.clientY };

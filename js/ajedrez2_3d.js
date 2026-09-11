@@ -658,7 +658,7 @@ class Ajedrez2Tablero3D {
         this._movio = true;
         const dx = e.clientX - this._ultimoPuntero.x;
         const dy = e.clientY - this._ultimoPuntero.y;
-        this._azimut = Math.min(1.15, Math.max(-1.15, this._azimut - dx * 0.006));
+        this._azimut -= dx * 0.006; // sin límite: se puede dar toda la vuelta, 360°
         this._elevacion = Math.min(1.35, Math.max(0.55, this._elevacion - dy * 0.004));
       }
       this._ultimoPuntero = { x: e.clientX, y: e.clientY };

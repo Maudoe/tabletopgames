@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0a0908">
   <title>GameHub</title>
-  <link rel="stylesheet" href="css/style.css?v=29">
+  <link rel="stylesheet" href="css/style.css?v=30">
 </head>
 <body class="menu-fondo">
 
@@ -375,7 +375,7 @@
 
         <hr class="separador">
 
-        <canvas id="preview-tablero" class="preview-tablero" width="320" height="150"></canvas>
+        <div id="preview-tablero" class="preview-tablero-3d"></div>
 
         <div class="campo" style="margin-top:16px;">
           <div class="campo-label">Piedras — Negro</div>
@@ -454,7 +454,7 @@
 
         <hr class="separador">
 
-        <canvas id="preview-tablero-ajedrez" class="preview-tablero" width="320" height="150"></canvas>
+        <div id="preview-tablero-ajedrez" class="preview-tablero-3d"></div>
 
         <div class="campo" style="margin-top:16px;">
           <div class="campo-label">Piezas — Blancas</div>
@@ -601,7 +601,7 @@
 
         <hr class="separador">
 
-        <canvas id="preview-tablero-damas" class="preview-tablero" width="320" height="150"></canvas>
+        <div id="preview-tablero-damas" class="preview-tablero-3d"></div>
 
         <div class="campo" style="margin-top:16px;">
           <div class="campo-label">Piezas — Blancas</div>
@@ -723,10 +723,10 @@
   <script src="js/damas.js?v=1"></script>
   <script src="js/worldpaises.js?v=1"></script>
   <script src="js/teg.js?v=2"></script>
-  <script src="js/board3d.js?v=23"></script>
-  <script src="js/chess3d.js?v=21"></script>
-  <script src="js/damas3d.js?v=3"></script>
-  <script src="js/tegmapa.js?v=22"></script>
+  <script src="js/board3d.js?v=44"></script>
+  <script src="js/chess3d.js?v=24"></script>
+  <script src="js/damas3d.js?v=6"></script>
+  <script src="js/tegmapa.js?v=24"></script>
   <!-- Puente módulo → script clásico para GLTFLoader (ver js/ajedrez2_3d.js).
        Tiene que ser un <script type="module"> INLINE, no un src="..." local:
        Chrome bloquea la carga de módulos ES desde archivos locales bajo
@@ -763,19 +763,23 @@
     window.dispatchEvent(new Event("personajes-loader-listo"));
   </script>
   <script src="js/personajes/medievalKnight.js?v=1"></script>
-  <script src="js/personajes/reinaNegra.js?v=1"></script>
-  <script src="js/personajes/reyNegro.js?v=1"></script>
-  <script src="js/personajes/torreNegra.js?v=1"></script>
-  <script src="js/personajes/alfilNegro.js?v=2"></script>
-  <script src="js/personajes/peonNegro.js?v=1"></script>
-  <script src="js/personajes/reyBlanco.js?v=1"></script>
-  <script src="js/personajes/reinaBlanca.js?v=1"></script>
-  <script src="js/personajes/torreBlanca.js?v=1"></script>
-  <script src="js/personajes/alfilBlanco.js?v=1"></script>
-  <script src="js/personajes/caballoBlanco.js?v=1"></script>
-  <script src="js/personajes/peonBlanco.js?v=1"></script>
-  <script src="js/personajes/caballoNegro.js?v=1"></script>
-  <script src="js/ajedrez2_3d.js?v=12"></script>
-  <script src="js/app.js?v=34"></script>
+  <script src="js/personajes/reinaNegra.js?v=3"></script>
+  <script src="js/personajes/reyNegro.js?v=3"></script>
+  <script src="js/personajes/torreNegra.js?v=3"></script>
+  <script src="js/personajes/alfilNegro.js?v=3"></script>
+  <script src="js/personajes/peonNegro.js?v=3"></script>
+  <script src="js/personajes/reyBlanco.js?v=3"></script>
+  <script src="js/personajes/reinaBlanca.js?v=3"></script>
+  <script src="js/personajes/torreBlanca.js?v=3"></script>
+  <script src="js/personajes/alfilBlanco.js?v=3"></script>
+  <script src="js/personajes/caballoBlanco.js?v=3"></script>
+  <script src="js/personajes/peonBlanco.js?v=3"></script>
+  <script src="js/personajes/caballoNegro.js?v=3"></script>
+  <script src="js/personajes/linternaPiedra.js?v=1"></script>
+  <script src="js/personajes/linternaChica.js?v=1"></script>
+  <script src="js/texturas_pasto.js?v=1"></script>
+  <script src="js/personajes/sakuraChica.js?v=1"></script>
+  <script src="js/ajedrez2_3d.js?v=13"></script>
+  <script src="js/app.js?v=39"></script>
 </body>
 </html>

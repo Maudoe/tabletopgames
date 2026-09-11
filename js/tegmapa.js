@@ -10,15 +10,20 @@
 // es idéntica a la versión Leaflet anterior, así que app.js no tiene que
 // cambiar salvo por sacar la carga de Leaflet en index.html.
 
+// Fichas "dos tonos + oro" — mismo estilo que las de Damas (ver
+// materialPiezaAjedrez en chess3d.js), no piedras/gemas lisas como las de
+// Go. `color` es sólo para la interfaz 2D (punto de color en la lista de
+// jugadores, swatch de selección); `colorId` es la clave real en
+// PALETA_PIEDRAS (board3d.js) que arma el material de la ficha 3D.
 const PALETA_JUGADORES_TEG = {
-  azul:    { nombre: "Azul",    color: "#4a7fd6" },
-  rojo:    { nombre: "Rojo",    color: "#e0483a" },
-  verde:   { nombre: "Verde",   color: "#4ad68f" },
-  dorado:  { nombre: "Dorado",  color: "#e8b84b" },
-  violeta: { nombre: "Violeta", color: "#9a5fe0" },
-  blanco:  { nombre: "Blanco",  color: "#eef0f2" },
+  blanco:   { nombre: "Blanco y Oro",     colorId: "blancoOro",     color: "#f3ecd9" },
+  negro:    { nombre: "Negro y Oro",      colorId: "negroOro",      color: "#3a3128" },
+  rojo:     { nombre: "Rojo Oscuro y Oro", colorId: "rojoOscuroOro", color: "#9c2530" },
+  turquesa: { nombre: "Turquesa y Oro",   colorId: "turquesaOro",   color: "#4fe0d0" },
+  verde:    { nombre: "Verde y Oro",      colorId: "verdeOro",      color: "#4fcf7a" },
+  dorado:   { nombre: "Dorado",           colorId: "dorado",        color: "#e8b84b" },
 };
-const ORDEN_COLORES_TEG = ["azul", "rojo", "verde", "dorado", "violeta", "blanco"];
+const ORDEN_COLORES_TEG = ["blanco", "negro", "rojo", "turquesa", "verde", "dorado"];
 
 // Aclara/oscurece un color hex mezclándolo hacia blanco (cantidad > 0) o
 // negro (cantidad < 0) — para el moteado de las piedras y los tintes de
@@ -238,23 +243,26 @@ class TegMapa {
       ctx.save();
       ctx.clip(this._pathTierra);
       // Terreno táctico tipo HUD militar (Battlefield/Medal of Honor,
-      // pedido explícito) en vez de madera: base grafito-oliva oscura,
-      // grilla fina ámbar y trazos angulares tipo circuito — nada de
-      // vetas orgánicas curvas, todo ángulos rectos/diagonales.
+      // pedido explícito), pero en gris pizarra frío en vez del
+      // grafito-oliva + grilla ámbar de la primera versión: ese fondo
+      // negro con líneas naranjas competía de igual a igual con las
+      // propias fichas (varias son doradas/naranjas/rojas) y las tapaba
+      // — un terreno más neutro y frío deja que cualquier color de ficha
+      // se note por contraste, sin un tinte cálido propio peleándole.
       const terreno = ctx.createLinearGradient(0, 0, W, H);
-      terreno.addColorStop(0, "#3a4038"); terreno.addColorStop(0.5, "#262b22"); terreno.addColorStop(1, "#14170f");
+      terreno.addColorStop(0, "#3c444c"); terreno.addColorStop(0.5, "#262c32"); terreno.addColorStop(1, "#14171b");
       ctx.fillStyle = terreno;
       ctx.fillRect(0, 0, W, H);
 
-      ctx.strokeStyle = "rgba(255,176,64,0.09)";
+      ctx.strokeStyle = "rgba(170,195,215,0.1)";
       ctx.lineWidth = 1;
       const paso = W * 0.018;
       for (let x = 0; x < W; x += paso) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
       for (let y = 0; y < H; y += paso) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
 
-      ctx.globalAlpha = 0.16;
+      ctx.globalAlpha = 0.14;
       for (let i = 0; i < 50; i++) {
-        ctx.strokeStyle = i % 3 === 0 ? "#ffb347" : i % 3 === 1 ? "#4fd0e0" : "#5a6350";
+        ctx.strokeStyle = i % 3 === 0 ? "#bcd4e6" : i % 3 === 1 ? "#6a7a86" : "#8fa0ac";
         ctx.lineWidth = 1 + Math.random() * 1.3;
         const x0 = Math.random() * W, y0 = Math.random() * H;
         const largo = W * (0.025 + Math.random() * 0.06);
@@ -266,7 +274,7 @@ class TegMapa {
       }
       ctx.globalAlpha = 1;
       ctx.restore();
-      ctx.strokeStyle = "rgba(255,176,64,0.6)";
+      ctx.strokeStyle = "rgba(210,225,235,0.5)";
       ctx.lineWidth = 0.9;
       ctx.stroke(this._pathTierra);
     }
@@ -593,32 +601,6 @@ class TegMapa {
     return geo;
   }
 
-  // Ficha "gema": el intento anterior (mapa de mármol opaco + poca
-  // transmisión) se leía como una bolita de plástico/caramelo, no como
-  // piedra preciosa. Acá se saca el mapa de color por completo — nada de
-  // textura pintada encima tapando la transparencia — y en cambio se
-  // apoya todo en las propiedades físicas: transmisión bien alta (deja
-  // pasar la luz de verdad), un índice de refracción de gema (más que el
-  // 1.5 típico del vidrio) y un `attenuationColor` — el color no se pinta
-  // en la superficie, se ve como si tiñera la luz que atraviesa la piedra,
-  // más oscuro/saturado hacia el centro — que es justo el efecto "brilla
-  // desde adentro" de una gema tallada de verdad.
-  _materialFicha(hex) {
-    this._cacheMateriales = this._cacheMateriales || {};
-    if (this._cacheMateriales[hex]) return this._cacheMateriales[hex];
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: hex,
-      roughness: 0.05, metalness: 0,
-      transmission: 0.6, thickness: 0.35, ior: 1.8,
-      attenuationColor: new THREE.Color(hex), attenuationDistance: 0.6,
-      clearcoat: 1, clearcoatRoughness: 0.05,
-      reflectivity: 1, specularIntensity: 1,
-      emissive: new THREE.Color(hex), emissiveIntensity: 0.18,
-    });
-    this._cacheMateriales[hex] = mat;
-    return mat;
-  }
-
   _spriteNumero(texto) {
     const N = 128;
     const cv = document.createElement("canvas");
@@ -633,24 +615,44 @@ class TegMapa {
     return new THREE.CanvasTexture(cv);
   }
 
-  // Crea, una sola vez, una piedra + sprite de número + anillo por
-  // territorio (actualizar() sólo les cambia color/texto/visibilidad, nunca
-  // las reconstruye — en TEG todo territorio siempre tiene dueño). Con 256
-  // países en el mismo tablero, mucho más chicas que las de Go/Ajedrez para
-  // que no se pisen entre sí ni se salgan del país que representan.
+  // Crea, una sola vez, una ficha (cuerpo + remate dorado) + sprite de
+  // número + anillo por territorio (actualizar() sólo les cambia color/
+  // texto/visibilidad, nunca las reconstruye — en TEG todo territorio
+  // siempre tiene dueño). Con 256 países en el mismo tablero, mucho más
+  // chicas que las de Go/Ajedrez para que no se pisen entre sí ni se
+  // salgan del país que representan. Mismo material "dos tonos + oro" que
+  // las fichas de Damas (materialPiezaAjedrez, ver chess3d.js) en vez de
+  // la gema translúcida de antes — pedido explícito: que se vean como las
+  // de Damas, no como piedras/gemas de Go.
   _crearFichas() {
     this._radioFicha = 0.075;
     const geoPiedra = this._geometriaPiedra(this._radioFicha);
-    const altura = 0.05 + this._radioFicha * 0.62;
+    const altoPiedra = this._radioFicha * 0.62;
+    const geoCap = new THREE.SphereGeometry(this._radioFicha * 0.34, 10, 8);
+    const altura = 0.05 + altoPiedra;
     for (const id of Object.keys(TERRITORIOS)) {
       const { x, z } = this._posiciones[id];
       const grupo = new THREE.Group();
       grupo.position.set(x, altura, z);
 
-      const piedra = new THREE.Mesh(geoPiedra, this._materialFicha("#666666"));
-      piedra.castShadow = true; piedra.receiveShadow = true;
-      piedra.userData.territorioId = id;
-      grupo.add(piedra);
+      // material placeholder sin importancia: actualizar() lo reemplaza
+      // apenas arranca la partida (ver comentario arriba, todo territorio
+      // siempre tiene dueño) con un CLON propio del material compartido
+      // (ver actualizar() más abajo) — clon propio y no la instancia
+      // compartida de materialPiezaAjedrez a propósito: el hover de acá
+      // (_pintarEmissive) muta el emissive del material, y si todas las
+      // fichas del mismo color compartieran una sola instancia (o encima
+      // la MISMA que usan las piezas reales de Ajedrez/Damas, que sale del
+      // mismo cache), iluminar una de más also iluminaría a todas las
+      // demás con ese color en el mapa entero.
+      const cuerpo = new THREE.Mesh(geoPiedra, new THREE.MeshStandardMaterial({ color: 0x666666 }));
+      cuerpo.castShadow = true; cuerpo.receiveShadow = true;
+      cuerpo.userData.territorioId = id;
+      grupo.add(cuerpo);
+
+      const cap = new THREE.Mesh(geoCap, new THREE.MeshStandardMaterial({ color: 0x666666 }));
+      cap.position.y = altoPiedra * 0.82;
+      grupo.add(cap);
 
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this._spriteNumero("0"), transparent: true, depthTest: false, fog: false }));
       sprite.scale.set(0.12, 0.12, 1);
@@ -667,7 +669,7 @@ class TegMapa {
       // `alturaY`: la altura "de reposo" del grupo (donde vuelve cuando no
       // hay hover); `hoverActual` es la elevación extra ya aplicada (se
       // anima hacia 0 o hacia el máximo en _loop, nunca salta de golpe).
-      this._fichas[id] = { grupo, piedra, sprite, anillo, continente: TERRITORIOS[id].continente, alturaY: altura, hoverActual: 0 };
+      this._fichas[id] = { grupo, cuerpo, cap, sprite, anillo, continente: TERRITORIOS[id].continente, alturaY: altura, hoverActual: 0 };
     }
   }
 
@@ -805,16 +807,30 @@ class TegMapa {
 
   onTerritorio(cb) { this._onTerritorio = cb; }
 
-  // `coloresPorJugador`: array de hex, uno por índice de jugador.
+  // `coloresPorJugador`: array de colorId (claves de PALETA_PIEDRAS), uno
+  // por índice de jugador — ver PALETA_JUGADORES_TEG.colorId en este mismo
+  // archivo y materialPiezaAjedrez() en chess3d.js.
   // `opciones`: { seleccion: territorioId|null, resaltados: [territorioId,...] }
   actualizar(teg, coloresPorJugador, opciones = {}) {
     for (const id of Object.keys(TERRITORIOS)) {
       const info = teg.board[id];
       const f = this._fichas[id];
       if (!f) continue;
-      const color = coloresPorJugador[info.dueno] || "#666666";
-      f.colorActual = color;
-      f.piedra.material = this._materialFicha(color);
+      const colorId = coloresPorJugador[info.dueno] || "plata";
+      if (f.colorActual !== colorId) {
+        f.colorActual = colorId;
+        const mats = materialPiezaAjedrez(colorId);
+        f.cuerpo.material.dispose();
+        f.cuerpo.material = mats.cuerpo.clone();
+        f.cap.material.dispose();
+        f.cap.material = mats.trim.clone();
+        // brillo propio "de fábrica" del material, para poder restaurarlo
+        // después de un hover de continente (ver _pintarEmissive) sin
+        // tener que reconstruirlo a partir de un color.
+        f._emisivoBase = f.cuerpo.material.emissive
+          ? { color: f.cuerpo.material.emissive.clone(), intensity: f.cuerpo.material.emissiveIntensity }
+          : null;
+      }
       if (f.sprite.material.map) f.sprite.material.map.dispose();
       f.sprite.material.map = this._spriteNumero(String(info.ejercitos));
       f.sprite.material.needsUpdate = true;
@@ -889,16 +905,17 @@ class TegMapa {
     for (const id of Object.keys(this._fichas)) this._pintarEmissive(this._fichas[id]);
   }
 
-  // El material "gema" ya trae su propio brillo interior tenue (emissive =
-  // su propio color, a baja intensidad — ver _materialFicha); acá sólo se
-  // sube a un naranja fuerte cuando el continente de esta ficha está en
-  // hover, y si no, se restaura ese brillo propio (nunca a negro puro, o
-  // la piedra se apaga del todo y vuelve a leerse como plástico opaco).
+  // El material de la ficha (materialPiezaAjedrez) ya trae su propio brillo
+  // tenue "de fábrica" (guardado en f._emisivoBase al asignarlo, ver
+  // actualizar()); acá sólo se sube a un naranja fuerte cuando el
+  // continente de esta ficha está en hover, y si no, se restaura ese
+  // brillo propio (nunca a negro puro, o la ficha se apaga del todo).
   _pintarEmissive(f) {
-    if (!f.piedra.material.emissive) return;
+    const mat = f.cuerpo.material;
+    if (!mat.emissive) return;
     const on = this._continenteResaltado && f.continente === this._continenteResaltado;
-    if (on) { f.piedra.material.emissive.set(0xff7a2c); f.piedra.material.emissiveIntensity = 0.6; }
-    else { f.piedra.material.emissive.set(f.colorActual || "#666666"); f.piedra.material.emissiveIntensity = 0.18; }
+    if (on) { mat.emissive.set(0xff7a2c); mat.emissiveIntensity = 0.6; }
+    else if (f._emisivoBase) { mat.emissive.copy(f._emisivoBase.color); mat.emissiveIntensity = f._emisivoBase.intensity; }
   }
 
   _actualizarPuntero(e) {
@@ -917,7 +934,7 @@ class TegMapa {
   // "sienta" exactamente donde se ve la piedra, sin ese paralaje.
   _territorioBajoPuntero() {
     this._raycaster.setFromCamera(this._puntero, this.camara);
-    const objetos = Object.values(this._fichas).map((f) => f.piedra);
+    const objetos = Object.values(this._fichas).map((f) => f.cuerpo);
     const hits = this._raycaster.intersectObjects(objetos, false);
     return hits.length ? hits[0].object.userData.territorioId : null;
   }

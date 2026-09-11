@@ -521,6 +521,24 @@ hr.separador { border: none; border-top: 1px solid var(--borde); margin: 20px 0;
   box-shadow: 0 8px 20px rgba(0,0,0,0.4);
 }
 
+/* vista previa 3D real: mismo marco que la anterior de canvas 2D, pero acá
+   adentro vive una instancia chica del tablero de verdad (mismas luces,
+   mismos materiales) — así lo que se ve acá es exactamente lo que se va a
+   ver al jugar, no una aproximación plana. */
+.preview-tablero-3d {
+  position: relative; width: 100%; aspect-ratio: 320 / 190; border-radius: 12px;
+  border: 1px solid rgba(var(--oro-rgb), 0.35);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  overflow: hidden; background: #08080a; cursor: grab;
+}
+.preview-tablero-3d:active { cursor: grabbing; }
+.preview-tablero-3d canvas { display: block; width: 100%; height: 100%; }
+.preview-tablero-3d::after {
+  content: "arrastrá para girar"; position: absolute; right: 10px; bottom: 8px;
+  font-size: 11px; color: rgba(255,255,255,0.55); pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
 /* ---- selector de color/tablero: fila de muestras circulares o rects ---- */
 .fila-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .swatch-piedra {

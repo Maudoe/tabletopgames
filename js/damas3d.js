@@ -54,6 +54,15 @@ class DamasTablero3D {
     this._planoClick = null;
     this._onCasilla = null;
 
+    // linternas de piedra decorativas en las 4 esquinas — ver
+    // habilitarLinternas()/_actualizarLinternas() más abajo (mismo modelo
+    // y técnica que el Go, ver js/board3d.js).
+    this._linternasHabilitadas = false;
+    this._grupoLinternas = null;
+    this._linternasLuces = [];
+    this._linternaGLTFCache = null;
+    this._texGlowLinterna = null;
+
     this._azimut = 0.08;
     this._elevacion = 0.78;
     this._distancia = 15;
@@ -360,6 +369,101 @@ class DamasTablero3D {
     this._piezasListo = false;
     this._animaciones = [];
     this._ultimoMovKey = null;
+
+    this._actualizarLinternas();
+  }
+
+  // Sólo el tablero de juego real llama esto (ver inicializarTablero3dDamas()
+  // en app.js) — la vista previa chica del modal de configuración usa la
+  // misma clase pero sin linternas.
+  habilitarLinternas() { this._linternasHabilitadas = true; }
+
+  // Cuatro linternas de piedra japonesas en las esquinas — mismo modelo y
+  // técnica que en el Go/Ajedrez (ver board3d.js/chess3d.js): tablero fijo
+  // de 8x8, así que las esquinas y la altura son constantes.
+  _actualizarLinternas() {
+    if (this._grupoLinternas) { this.escena.remove(this._grupoLinternas); this._grupoLinternas = null; }
+    this._linternasLuces = [];
+    if (!this._linternasHabilitadas) return;
+
+    const grupoActual = new THREE.Group();
+    this._grupoLinternas = grupoActual;
+    this.escena.add(grupoActual);
+
+    const mitad = 4.34 + 1.3;
+    const esquinas = [[-mitad, -mitad], [mitad, -mitad], [-mitad, mitad], [mitad, mitad]];
+    const altura = 2.2;
+    const ALTURA_FUEGO_FRAC = 0.5;
+
+    if (!this._texGlowLinterna) {
+      const N = 64;
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = N;
+      const ctx = cv.getContext("2d");
+      const g = ctx.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+      g.addColorStop(0, "rgba(255,247,214,0.95)");
+      g.addColorStop(0.28, "rgba(255,190,70,0.85)");
+      g.addColorStop(0.6, "rgba(255,110,35,0.55)");
+      g.addColorStop(1, "rgba(200,35,15,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, N, N);
+      this._texGlowLinterna = new THREE.CanvasTexture(cv);
+    }
+
+    const construirEn = (gltf) => {
+      if (this._grupoLinternas !== grupoActual) return;
+      const caja = new THREE.Box3().setFromObject(gltf.scene);
+      const alto = caja.max.y - caja.min.y || 1;
+      const centroX = (caja.max.x + caja.min.x) / 2;
+      const centroZ = (caja.max.z + caja.min.z) / 2;
+      const pisoY = caja.min.y;
+      const escala = altura / alto;
+      const alturaFuego = altura * ALTURA_FUEGO_FRAC;
+      esquinas.forEach(([ex, ez]) => {
+        const modelo = gltf.scene.clone(true);
+        modelo.traverse((o) => {
+          if (!o.isMesh) return;
+          o.castShadow = true;
+          o.receiveShadow = true;
+          o.material = o.material.clone();
+          o.material.emissiveIntensity = 2.4;
+        });
+        const grupo = new THREE.Group();
+        modelo.position.set(-centroX, -pisoY, -centroZ);
+        grupo.add(modelo);
+        grupo.scale.setScalar(escala);
+        grupo.position.set(ex, 0, ez);
+        grupoActual.add(grupo);
+
+        const nucleo = new THREE.Mesh(
+          new THREE.SphereGeometry(altura * 0.05, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0xfff2cf, toneMapped: false, fog: false })
+        );
+        nucleo.position.set(ex, alturaFuego, ez);
+        grupoActual.add(nucleo);
+        const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: this._texGlowLinterna, transparent: true, blending: THREE.AdditiveBlending,
+          depthWrite: false, opacity: 0.95, fog: false,
+        }));
+        halo.userData.escalaBase = altura * 0.8;
+        halo.scale.setScalar(halo.userData.escalaBase);
+        halo.position.set(ex, alturaFuego, ez);
+        grupoActual.add(halo);
+
+        const luz = new THREE.PointLight(0xffb066, 2.4, 18, 2);
+        luz.position.set(ex, alturaFuego, ez);
+        grupoActual.add(luz);
+        this._linternasLuces.push({ luz, halo, fase: Math.random() * 10 });
+      });
+    };
+
+    if (this._linternaGLTFCache) construirEn(this._linternaGLTFCache);
+    else if (window.cargarPersonajeGLTF) {
+      window.cargarPersonajeGLTF("linternaPiedra", (gltf) => {
+        this._linternaGLTFCache = gltf;
+        construirEn(gltf);
+      }, (err) => console.error("No se pudo cargar la linterna de piedra", err));
+    }
   }
 
   cambiarTablero(tipoTablero) { this._crearTableroBase(tipoTablero); }
@@ -591,6 +695,17 @@ class DamasTablero3D {
       const p = Math.sin(this._tiempo * 3.1) * 0.22 + Math.sin(this._tiempo * 11.3) * 0.1;
       this.luzInferior.intensity = this._intensidadLuzInferiorBase + p * (this._intensidadLuzInferiorBase / 2.8);
       if (this._discoGlowInferior) this._discoGlowInferior.material.opacity = Math.max(0.5, this._opacidadGlowInferiorBase + p * 0.12);
+    }
+
+    if (this._linternasLuces.length) {
+      this._linternasLuces.forEach((o) => {
+        const p = Math.sin(this._tiempo * 2.3 + o.fase) * 0.3 + Math.sin(this._tiempo * 7.1 + o.fase) * 0.15;
+        o.luz.intensity = 2.4 + p * 1.6;
+        if (o.halo) {
+          o.halo.material.opacity = 0.8 + p * 0.35;
+          o.halo.scale.setScalar(o.halo.userData.escalaBase * (1 + p * 0.12));
+        }
+      });
     }
 
     const r = this._distancia;

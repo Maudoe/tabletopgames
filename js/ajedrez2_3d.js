@@ -14,12 +14,18 @@ class Ajedrez2Tablero3D {
     this.escena = new THREE.Scene();
     this.escena.background = null;
 
-    this.camara = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+    // far 240 (era 100): el domo de estrellas vive en un radio de ~100 y
+    // con far corto quedaría recortado por el frustum (mismo bug que se
+    // encontró y arregló en board3d.js).
+    this.camara = new THREE.PerspectiveCamera(38, 1, 0.1, 240);
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.12;
+    // 1.12 → 1.22: medio punto de exposición de más para toda la escena —
+    // parte del "mejorar la iluminación en general": las piezas y el
+    // césped quedaban por debajo del punto medio del tone mapping.
+    this.renderer.toneMappingExposure = 1.22;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.dom = this.renderer.domElement;
@@ -68,16 +74,24 @@ class Ajedrez2Tablero3D {
     // nomás; las antorchas (_crearAntorchas, llamadas desde el
     // constructor) son las que de verdad iluminan las piezas de cerca,
     // con luz cálida y direccional en vez de un baño parejo de luz fría.
-    const hemi = new THREE.HemisphereLight(0x8a734a, 0x0a0806, 0.55);
+    // Cielo nocturno azulado + rebote de tierra cálido (mismo criterio que
+    // el jardín del Go): con el prado de pasto nuevo, el ambiente 100%
+    // cálido de antes aplastaba el verde y dejaba las piezas leyéndose
+    // contra un fondo marrón sucio. Un poco más fuerte que antes además
+    // (0.55→0.8): pedido explícito, "mejorar la iluminación en general" —
+    // las piezas oscuras (equipo negro) casi no se separaban del fondo.
+    const hemi = new THREE.HemisphereLight(0x4a5f8a, 0x1d1810, 0.8);
     this.escena.add(hemi);
-    this.key = new THREE.DirectionalLight(0xfff2d8, 1.7);
+    this.key = new THREE.DirectionalLight(0xfff2d8, 2.3);
     this.key.position.set(-4.2, 6.5, 3.4);
     this.key.castShadow = true;
     this.key.shadow.mapSize.set(2048, 2048);
-    this.key.shadow.camera.left = -6;
-    this.key.shadow.camera.right = 6;
-    this.key.shadow.camera.top = 6;
-    this.key.shadow.camera.bottom = -6;
+    // ±8.5 (era ±6): ahora tiene que cubrir también la meseta de césped
+    // con las antorchas, no sólo el tablero.
+    this.key.shadow.camera.left = -8.5;
+    this.key.shadow.camera.right = 8.5;
+    this.key.shadow.camera.top = 8.5;
+    this.key.shadow.camera.bottom = -8.5;
     this.key.shadow.camera.near = 1;
     this.key.shadow.camera.far = 20;
     this.key.shadow.bias = -0.0018;
@@ -160,9 +174,35 @@ class Ajedrez2Tablero3D {
     const matBaya = new THREE.MeshBasicMaterial({ color: 0xbaffc8, toneMapped: false });
     const texGlowBaya = this._crearTexturaGlow("rgba(200,255,215,0.95)", "rgba(120,255,150,0.55)");
 
+    // sombra de contacto compartida para asentar cada antorcha en el pasto
+    const cvSombra = document.createElement("canvas");
+    cvSombra.width = cvSombra.height = 128;
+    const sctx = cvSombra.getContext("2d");
+    const gSombra = sctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gSombra.addColorStop(0, "rgba(0,0,0,0.75)");
+    gSombra.addColorStop(0.6, "rgba(0,0,0,0.35)");
+    gSombra.addColorStop(1, "rgba(0,0,0,0)");
+    sctx.fillStyle = gSombra;
+    sctx.fillRect(0, 0, 128, 128);
+    const texSombra = new THREE.CanvasTexture(cvSombra);
+
     for (const [ex, ez] of esquinas) {
       const grupo = new THREE.Group();
-      grupo.position.set(ex, 0, ez);
+      // Antes flotaban a la altura del tablero (y=0), al lado de la losa —
+      // ahora asientan en el césped de la meseta, apenas enterradas, y son
+      // más grandes (x1.7): con el tablero elevado sobre su plinto, al
+      // tamaño original las llamas quedaban escondidas detrás de la losa.
+      const baseY = this._alturaTerreno(ex, ez);
+      grupo.position.set(ex, baseY - 0.06, ez);
+      grupo.scale.setScalar(1.7);
+
+      const sombra = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.1, 1.1),
+        new THREE.MeshBasicMaterial({ map: texSombra, transparent: true, depthWrite: false })
+      );
+      sombra.rotation.x = -Math.PI / 2;
+      sombra.position.y = 0.07; // en coordenadas del grupo, justo sobre el pasto
+      grupo.add(sombra);
 
       // rama retorcida: 4 segmentos apilados, cada uno un poco desviado en
       // ángulo y grosor — no un cilindro recto — así se lee como una rama
@@ -282,24 +322,43 @@ class Ajedrez2Tablero3D {
   }
 
   _crearHabitacion() {
-    const PISO_Y = -1.6;
-    this.escena.background = new THREE.Color(0x08080a);
-    // Arranca bien más lejos que en el resto de la casa (12→22): con la
-    // cámara por default a distancia 15, la fila de atrás quedaba adentro
-    // de la niebla y se apagaba sola — acá no hay que perder detalle de
-    // las piezas por eso.
-    this.escena.fog = new THREE.Fog(0x08080a, 22, 46);
+    // Prado nocturno en vez de estudio negro (pedido explícito: "que tenga
+    // el piso de pasto", como el jardín del Go): meseta de césped elevada
+    // donde asienta el tablero con su plinto, falda que baja al campo, y
+    // pasto instanciado encima — misma arquitectura que board3d.js, acá
+    // con medidas fijas porque el tablero siempre mide 8x8.
+    const PISO_Y = -2.2;
+    this._pisoY = PISO_Y;
+    // pisoHueco del pedestal es -0.85 (grosor 0.3 + HUECO 0.55, ver
+    // _crearTableroBase) — la meseta queda 0.55 más abajo, así el tablero
+    // se lee elevado ~1.4 sobre el césped, igual que en el Go.
+    this._alturaMeseta = -1.4;
+    // las antorchas van en las esquinas a 4.69 del centro: la meseta cubre
+    // esa diagonal con margen.
+    this._radioMeseta = 4.69 * Math.SQRT2 + 1.5;
+    this._radioFalda = this._radioMeseta + 8;
 
-    const geoPiso = new THREE.PlaneGeometry(120, 120);
+    this.escena.background = new THREE.Color(0x05070d);
+    // Niebla lejos (las piezas no pueden perder detalle por niebla) pero
+    // presente para fundir el campo con el cielo en el horizonte.
+    this.escena.fog = new THREE.Fog(0x06080f, 22, 55);
+
+    // piso base mate y oscuro como respaldo bajo el terreno (la ondulación
+    // del campo baja un poco por debajo de PISO_Y).
+    const geoPiso = new THREE.PlaneGeometry(200, 200);
     geoPiso.rotateX(-Math.PI / 2);
-    const matPiso = new THREE.MeshStandardMaterial({ color: 0x0e0e10, roughness: 0.75, metalness: 0.15 });
+    const matPiso = new THREE.MeshStandardMaterial({ color: 0x0a0c10, roughness: 0.95, metalness: 0.02 });
     const piso = new THREE.Mesh(geoPiso, matPiso);
-    piso.position.y = PISO_Y;
+    piso.position.y = PISO_Y - 0.3;
     piso.receiveShadow = true;
     this.escena.add(piso);
 
-    const acento = new THREE.PointLight(0x5b6f9c, 1.1, 16, 2);
-    acento.position.set(-6, 1.4, -5);
+    this._crearTerreno();
+    this._crearPasto();
+    this._crearEstrellas();
+
+    const acento = new THREE.PointLight(0x5b6f9c, 1.0, 20, 2);
+    acento.position.set(-7, 2.2, -6);
     this.escena.add(acento);
 
     const posLuna = new THREE.Vector3(-3.5, 9.5, -9);
@@ -336,6 +395,211 @@ class Ajedrez2Tablero3D {
     this.luzLuna.shadow.camera.far = 24;
     this.luzLuna.shadow.bias = -0.002;
     this.escena.add(this.luzLuna, this.luzLuna.target);
+  }
+
+  // ---- terreno de prado: meseta + falda + campo (portado de board3d.js,
+  // misma matemática; única fuente de verdad de la altura del suelo para
+  // el mesh del terreno, el pasto y las antorchas — nada flota). ----
+  _alturaTerreno(x, z) {
+    const r = Math.hypot(x, z);
+    const R1 = this._radioMeseta, R2 = this._radioFalda;
+    let y;
+    if (r <= R1) y = this._alturaMeseta;
+    else if (r >= R2) y = this._pisoY;
+    else {
+      const t = (r - R1) / (R2 - R1);
+      const s = t * t * (3 - 2 * t);
+      y = this._alturaMeseta + (this._pisoY - this._alturaMeseta) * s;
+    }
+    const fade = Math.min(1, Math.max(0, (r - R1) / 2.5));
+    y += fade * 0.07 * (Math.sin(x * 0.55 + 1.3) * Math.sin(z * 0.62 + 0.7) + Math.sin(x * 1.7) * Math.sin(z * 1.35) * 0.4);
+    return y;
+  }
+
+  // Césped procedural, en tonos un poco más oscuros y fríos que el del Go:
+  // esta escena es "embrujada" (fuego fantasma verde, enredaderas) y un
+  // verde alegre de jardín japonés le quitaba el clima.
+  _texturaTerreno() {
+    const N = 512;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = N;
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#1d2c13";
+    ctx.fillRect(0, 0, N, N);
+    const tonos = ["#152210", "#243a17", "#2c451d", "#182710", "#33491f"];
+    ctx.filter = `blur(${N * 0.012}px)`;
+    for (let i = 0; i < 240; i++) {
+      ctx.fillStyle = tonos[i % tonos.length];
+      ctx.globalAlpha = 0.1 + Math.random() * 0.16;
+      const cx = Math.random() * N, cy = Math.random() * N;
+      const rad = N * (0.02 + Math.random() * 0.055);
+      const ry = rad * (0.5 + Math.random());
+      const rot = Math.random() * Math.PI;
+      for (const dx of [-N, 0, N]) for (const dy of [-N, 0, N]) {
+        ctx.beginPath();
+        ctx.ellipse(cx + dx, cy + dy, rad, ry, rot, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.filter = "none";
+    for (let i = 0; i < 1500; i++) {
+      ctx.globalAlpha = 0.05 + Math.random() * 0.1;
+      ctx.fillStyle = Math.random() < 0.5 ? "#101a0a" : "#425c2a";
+      ctx.fillRect(Math.random() * N, Math.random() * N, 1.5, 1.5);
+    }
+    ctx.globalAlpha = 1;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  _crearTerreno() {
+    const RADIO = 60;
+    const SEG = 140;
+    const geo = new THREE.PlaneGeometry(RADIO * 2, RADIO * 2, SEG, SEG);
+    geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position;
+    const uv = geo.attributes.uv;
+    const TILE = 5.2;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      pos.setY(i, this._alturaTerreno(x, z));
+      uv.setXY(i, x / TILE, z / TILE);
+    }
+    geo.computeVertexNormals();
+    const terreno = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: this._texturaTerreno(), roughness: 0.95, metalness: 0 }));
+    terreno.receiveShadow = true;
+    this.escena.add(terreno);
+  }
+
+  // Brizna curva con gradiente por vértice (raíz oscura → punta clara) —
+  // misma receta que el Go, con la punta un toque menos saturada.
+  _geoBriznaPasto() {
+    const SEG = 4;
+    const ANCHO = 0.055;
+    const pos = [], col = [], idx = [];
+    const cRaiz = new THREE.Color(0x121f0c);
+    const cMedio = new THREE.Color(0x2e4a19);
+    const cPunta = new THREE.Color(0x6f9a37);
+    for (let i = 0; i <= SEG; i++) {
+      const t = i / SEG;
+      const w = ANCHO * (1 - t * 0.8);
+      const curva = t * t * 0.3;
+      const c = t < 0.55
+        ? cRaiz.clone().lerp(cMedio, t / 0.55)
+        : cMedio.clone().lerp(cPunta, (t - 0.55) / 0.45);
+      pos.push(-w, t, curva, w, t, curva);
+      col.push(c.r, c.g, c.b, c.r, c.g, c.b);
+    }
+    pos.push(0, 1.05, 0.36);
+    col.push(cPunta.r, cPunta.g, cPunta.b);
+    for (let i = 0; i < SEG; i++) {
+      const a = i * 2, b = a + 1, c2 = a + 2, d = a + 3;
+      idx.push(a, b, c2, b, d, c2);
+    }
+    idx.push(SEG * 2, SEG * 2 + 1, (SEG + 1) * 2);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  _crearPasto() {
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true, side: THREE.DoubleSide, roughness: 0.9, metalness: 0,
+    });
+    const CERCA = 10000;
+    const MATAS = 300, POR_MATA = 18;
+    const SUELTAS = 2200;
+    const TOTAL = CERCA + MATAS * POR_MATA + SUELTAS;
+    const inst = new THREE.InstancedMesh(this._geoBriznaPasto(), mat, TOTAL);
+    inst.castShadow = true;
+    inst.receiveShadow = true;
+
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const esc = new THREE.Vector3();
+    const p = new THREE.Vector3();
+    const euler = new THREE.Euler();
+    const tinte = new THREE.Color();
+    // dentro del zócalo del plinto no crece pasto ((8.68*0.94*1.12)/2)
+    const medioPlinto = 4.62;
+    let n = 0;
+    const plantar = (x, z, escalaExtra) => {
+      if (Math.abs(x) < medioPlinto && Math.abs(z) < medioPlinto) return;
+      const alto = (0.3 + Math.random() * 0.36) * escalaExtra;
+      p.set(x, this._alturaTerreno(x, z) - 0.015, z);
+      euler.set((Math.random() - 0.5) * 0.5, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.5, "YXZ");
+      q.setFromEuler(euler);
+      esc.set(0.9 + Math.random() * 0.7, alto, 1);
+      m.compose(p, q, esc);
+      inst.setMatrixAt(n, m);
+      const brillo = 0.65 + Math.random() * 0.5;
+      tinte.setRGB(brillo * (0.92 + Math.random() * 0.16), brillo, brillo * (0.85 + Math.random() * 0.15));
+      inst.setColorAt(n, tinte);
+      n++;
+    };
+    const R2 = this._radioFalda;
+    for (let i = 0; i < CERCA; i++) {
+      const enMeseta = i < CERCA * 0.45;
+      const rMin = enMeseta ? 0 : this._radioMeseta;
+      const rMax = enMeseta ? this._radioMeseta + 1.5 : R2;
+      const r = Math.sqrt(rMin * rMin + Math.random() * (rMax * rMax - rMin * rMin));
+      const ang = Math.random() * Math.PI * 2;
+      plantar(Math.cos(ang) * r, Math.sin(ang) * r, 1);
+    }
+    const R_CAMPO = 46;
+    for (let i = 0; i < MATAS; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(R2 * R2 + Math.random() * (R_CAMPO * R_CAMPO - R2 * R2));
+      const cx = Math.cos(ang) * r, cz = Math.sin(ang) * r;
+      for (let j = 0; j < POR_MATA; j++) {
+        const dr = Math.random() * 0.9;
+        const da = Math.random() * Math.PI * 2;
+        plantar(cx + Math.cos(da) * dr, cz + Math.sin(da) * dr, 1.15);
+      }
+    }
+    for (let i = 0; i < SUELTAS; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(R2 * R2 + Math.random() * (R_CAMPO * R_CAMPO - R2 * R2));
+      plantar(Math.cos(ang) * r, Math.sin(ang) * r, 1);
+    }
+    inst.count = n;
+    inst.instanceMatrix.needsUpdate = true;
+    if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+    this.escena.add(inst);
+  }
+
+  // Anillo de estrellas concentrado sobre el horizonte (misma lección que
+  // en board3d.js: la cámara mira el tablero desde arriba, la única franja
+  // de cielo que entra en cuadro es la baja).
+  _crearEstrellas() {
+    const texEstrella = this._crearTexturaGlow("rgba(255,255,255,1)", "rgba(255,255,255,0.5)");
+    const nube = (cantidad, tam, opacidad) => {
+      const posiciones = new Float32Array(cantidad * 3);
+      for (let i = 0; i < cantidad; i++) {
+        const u = Math.random() * Math.PI * 2;
+        const v = 0.005 + Math.pow(Math.random(), 2.4) * 0.9;
+        const r = 100;
+        posiciones[i * 3] = r * Math.cos(u) * Math.cos(v * Math.PI / 2);
+        posiciones[i * 3 + 1] = 2 + r * Math.sin(v * Math.PI / 2) * 0.8;
+        posiciones[i * 3 + 2] = r * Math.sin(u) * Math.cos(v * Math.PI / 2);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(posiciones, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0xc9d6ff, size: tam, sizeAttenuation: true, map: texEstrella,
+        transparent: true, opacity: opacidad, fog: false, depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      this.escena.add(new THREE.Points(geo, mat));
+    };
+    nube(340, 0.9, 0.6);
+    nube(110, 1.6, 0.95);
   }
 
   _texturaCasillas(tipo) {
@@ -438,18 +702,31 @@ class Ajedrez2Tablero3D {
     // pedestal + hueco con luz led (mismo criterio que el resto de la casa).
     const anchoTableroTotal = 8 + grosorMarco * 2;
     const HUECO = 0.55;
-    const ALTURA_PEDESTAL = 0.4;
     const anchoPedestal = anchoTableroTotal * 0.94;
     const techoHueco = -grosor;
     const pisoHueco = techoHueco - HUECO;
     const colorLuz = 0x4a7fd6;
 
+    // Plinto que baja hasta enterrarse en la meseta de césped (antes era
+    // una losa corta flotando en el aire — con el prado nuevo se veía la
+    // mesa como isla voladora, mismo problema que se arregló en el Go).
+    const ALTURA_PEDESTAL = pisoHueco - (this._alturaMeseta - 0.35);
     const matPedestal = new THREE.MeshStandardMaterial({ color: cfg.lateral, roughness: 0.7, metalness: 0.08 });
     const pedestal = new THREE.Mesh(new THREE.BoxGeometry(anchoPedestal, ALTURA_PEDESTAL, anchoPedestal), matPedestal);
     pedestal.position.y = pisoHueco - ALTURA_PEDESTAL / 2;
     pedestal.receiveShadow = true;
     pedestal.castShadow = true;
     this._grupoTablero.add(pedestal);
+
+    // zócalo al ras del césped, como base de monumento
+    const zocalo = new THREE.Mesh(
+      new THREE.BoxGeometry(anchoPedestal * 1.12, 0.34, anchoPedestal * 1.12),
+      matPedestal
+    );
+    zocalo.position.y = this._alturaMeseta + 0.03;
+    zocalo.receiveShadow = true;
+    zocalo.castShadow = true;
+    this._grupoTablero.add(zocalo);
 
     // -- tira de neón en el hueco (idéntica a Go/Ajedrez/Damas: un "tubo"
     // sólido nítido + un resplandor difuso encima) — se había perdido al
@@ -544,6 +821,23 @@ class Ajedrez2Tablero3D {
 
     Object.keys(porId).forEach((id) => {
       window.cargarPersonajeGLTF(id, (gltf) => {
+        // Auto-brillo sutil (una sola vez por personaje, en el material
+        // compartido por todos los clones): emissiveMap = su propia
+        // textura — el mismo truco de los árboles del Go. Las texturas de
+        // estos personajes son oscuras y con la luz nocturna de la escena
+        // el equipo negro se leía como un bulto sin detalle (pedido
+        // explícito: "todas las fichas tienen que verse bien
+        // renderizadas"). Esto levanta el detalle de la textura sin
+        // aplanar el volumen ni verse "radiactivo".
+        if (!gltf.scene.userData.brilloAplicado) {
+          gltf.scene.userData.brilloAplicado = true;
+          gltf.scene.traverse((o) => {
+            if (!o.isMesh || !o.material || !o.material.map) return;
+            o.material.emissiveMap = o.material.map;
+            o.material.emissive.set(0xffffff);
+            o.material.emissiveIntensity = 0.22;
+          });
+        }
         const caja = new THREE.Box3().setFromObject(gltf.scene);
         const alto = caja.max.y - caja.min.y || 1;
         const centroX = (caja.max.x + caja.min.x) / 2;
@@ -745,8 +1039,10 @@ class AjedrezInspector3D {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     contenedor.appendChild(this.renderer.domElement);
 
-    this.escena.add(new THREE.HemisphereLight(0x9aa6c8, 0x0a0806, 0.55));
-    const key = new THREE.DirectionalLight(0xfff2d8, 1.7);
+    // un toque más de luz que antes (0.55/1.7 → 0.7/2.0): los personajes
+    // de textura oscura quedaban apagados hasta en la vitrina.
+    this.escena.add(new THREE.HemisphereLight(0x9aa6c8, 0x0a0806, 0.7));
+    const key = new THREE.DirectionalLight(0xfff2d8, 2.0);
     key.position.set(-3, 4, 3);
     this.escena.add(key);
     const rim = new THREE.DirectionalLight(0xbfd4ff, 1.3);

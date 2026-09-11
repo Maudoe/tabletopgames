@@ -34,6 +34,7 @@ const DESC_VARIANTE = {
 // ---------------- modal: configurar Go ----------------
 function abrirModalGo() {
   $("#modal-go").classList.add("abierto");
+  redibujarPreview();
 }
 function cerrarModalGo() { $("#modal-go").classList.remove("abierto"); }
 
@@ -392,6 +393,7 @@ function mostrarResultado() {
 function inicializarTablero3d() {
   if (tablero3d) return;
   tablero3d = new Tablero3D($("#tablero-madera"));
+  tablero3d.habilitarLinternas();
   tablero3d.onCelda((x, y) => alClickTablero(x, y));
   tablero3d.dom.addEventListener("pointermove", () => {
     if (!partida || partida.terminado || esperandoBot || !esTurnoDelHumano()) {
@@ -482,33 +484,45 @@ function dibujarSwatchTablero(ctx, w, h, cfg) {
   ctx.globalAlpha = 1;
 }
 
-// Vista previa grande: el tablero elegido con un puñado de piedras de cada
-// color, para responder "cómo se vería" antes de jugar.
+// Vista previa: una instancia chica del tablero 3D de verdad (mismas luces,
+// mismos materiales que el juego real), con un puñado de piedras de cada
+// color — así se ve exactamente lo que se va a ver al jugar, no una
+// aproximación plana. Se crea recién al abrir el modal la primera vez (no
+// al cargar la página) para no tener una escena 3D de más corriendo sin
+// que nadie la vea.
+let previewGo3D = null;
+function asegurarPreviewGo3D() {
+  if (previewGo3D) return previewGo3D;
+  previewGo3D = new Tablero3D($("#preview-tablero"));
+  return previewGo3D;
+}
 function redibujarPreview() {
-  const cv = $("#preview-tablero");
-  const ctx = cv.getContext("2d");
-  const w = cv.width, h = cv.height;
-  dibujarSwatchTablero(ctx, w, h, PALETA_TABLEROS[form.tablero]);
-
-  const radio = h * 0.16;
-  const y = h * 0.5;
-  const posiciones = [0.14, 0.30, 0.46, 0.62, 0.78, 0.92];
-  posiciones.forEach((fx, i) => {
-    const cfg = PALETA_PIEDRAS[i % 2 === 0 ? form.colorNegro : form.colorBlanco];
-    const cvPiedra = document.createElement("canvas");
-    const N = 80;
-    cvPiedra.width = cvPiedra.height = N;
-    dibujarMarmol(cvPiedra.getContext("2d"), N, cfg);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(w * fx, y + (i % 2 === 0 ? -radio * 0.55 : radio * 0.55), radio, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = 6;
-    ctx.drawImage(cvPiedra, w * fx - radio, y + (i % 2 === 0 ? -radio * 0.55 : radio * 0.55) - radio, radio * 2, radio * 2);
-    ctx.restore();
-  });
+  const t3d = asegurarPreviewGo3D();
+  const primerArmado = t3d.tipoTablero !== form.tablero;
+  t3d.construir(5, form.tablero);
+  // construir() recalcula la distancia/zoom por defecto pensados para el
+  // tablero real (lejos, para que entre entero) — acá se pisa con un
+  // encuadre cerrado de vitrina, pero sólo la primera vez que se arma este
+  // tablero: si el usuario ya giró/acercó la cámara arrastrando, un cambio
+  // de color de tablero no debería resetearle la vista.
+  if (primerArmado) {
+    t3d._distancia = 5.6;
+    t3d._elevacion = 0.85;
+    t3d._azimut = 0.5;
+  }
+  t3d._zoomMin = 3;
+  t3d._zoomMax = 10;
+  t3d.setColorLuzInferior(PALETA_LUCES_INFERIOR[form.luz].color);
+  const partidaFalsa = {
+    size: 5,
+    board: new Array(25).fill(0),
+    idx: (x, y) => y * 5 + x,
+    ultimaJugada: null,
+  };
+  partidaFalsa.board[partidaFalsa.idx(1, 2)] = 1; // negro
+  partidaFalsa.board[partidaFalsa.idx(3, 2)] = 2; // blanco
+  t3d.actualizar(partidaFalsa, { colorNegro: form.colorNegro, colorBlanco: form.colorBlanco, unicolor: form.unicolor });
+  t3d.resize();
 }
 
 // Muestras de color para la luz bajo el tablero: son colores lisos (es una
@@ -534,8 +548,7 @@ function construirSwatchesLuz(contenedorId, estado, alCambiar) {
 construirSwatchesPiedra("swatches-negro", "colorNegro");
 construirSwatchesPiedra("swatches-blanco", "colorBlanco");
 construirSwatchesTablero();
-construirSwatchesLuz("swatches-luz", form);
-redibujarPreview();
+construirSwatchesLuz("swatches-luz", form, redibujarPreview);
 
 // ---------------- estado inicial del formulario ----------------
 $("#slider-nivel").style.setProperty("--pct", "0%");
@@ -558,7 +571,7 @@ const formAjedrez = {
   luz: "azul",
 };
 
-function abrirModalAjedrez() { $("#modal-ajedrez").classList.add("abierto"); }
+function abrirModalAjedrez() { $("#modal-ajedrez").classList.add("abierto"); redibujarPreviewAjedrez(); }
 function cerrarModalAjedrez() { $("#modal-ajedrez").classList.remove("abierto"); }
 $("#modal-ajedrez-cerrar").addEventListener("click", cerrarModalAjedrez);
 $("#modal-ajedrez").addEventListener("click", (e) => { if (e.target.id === "modal-ajedrez") cerrarModalAjedrez(); });
@@ -820,6 +833,7 @@ function mostrarResultadoAjedrez() {
 function inicializarTablero3dAjedrez() {
   if (tablero3dAjedrez) return;
   tablero3dAjedrez = new ChessTablero3D($("#tablero-ajedrez-madera"));
+  tablero3dAjedrez.habilitarLinternas();
   tablero3dAjedrez.onCasilla((x, y) => alClickCasillaAjedrez(x, y));
 }
 
@@ -872,37 +886,32 @@ function trazarSiluetaPeon(ctx, cx, cy, r) {
   ctx.arc(cx, cy - r * 0.34, r * 0.42, 0, Math.PI * 2);
 }
 
+let previewAjedrez3D = null;
+function asegurarPreviewAjedrez3D() {
+  if (previewAjedrez3D) return previewAjedrez3D;
+  previewAjedrez3D = new ChessTablero3D($("#preview-tablero-ajedrez"));
+  previewAjedrez3D._distancia = 6.2;
+  previewAjedrez3D._elevacion = 0.78;
+  previewAjedrez3D._azimut = 0.35;
+  previewAjedrez3D._zoomMin = 3.5;
+  previewAjedrez3D._zoomMax = 12;
+  return previewAjedrez3D;
+}
 function redibujarPreviewAjedrez() {
-  const cv = $("#preview-tablero-ajedrez");
-  const ctx = cv.getContext("2d");
-  const w = cv.width, h = cv.height;
-  dibujarSwatchTablero(ctx, w, h, PALETA_TABLEROS_AJEDREZ[formAjedrez.tablero]);
-
-  const radio = h * 0.19;
-  const y = h * 0.54;
-  const posiciones = [0.14, 0.30, 0.46, 0.62, 0.78, 0.92];
-  posiciones.forEach((fx, i) => {
-    const cfg = PALETA_PIEDRAS[i % 2 === 0 ? formAjedrez.colorNegras : formAjedrez.colorBlancas];
-    const cvPieza = document.createElement("canvas");
-    const N = 80;
-    cvPieza.width = cvPieza.height = N;
-    dibujarMarmol(cvPieza.getContext("2d"), N, cfg);
-    const cy = y + (i % 2 === 0 ? -radio * 0.35 : radio * 0.35);
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = 6;
-    trazarSiluetaPeon(ctx, w * fx, cy, radio);
-    ctx.clip();
-    ctx.drawImage(cvPieza, w * fx - radio, cy - radio, radio * 2, radio * 2);
-    ctx.restore();
-  });
+  const t3d = asegurarPreviewAjedrez3D();
+  t3d.cambiarTablero(formAjedrez.tablero);
+  t3d.setColorLuzInferior(PALETA_LUCES_INFERIOR[formAjedrez.luz].color);
+  const tableroFalso = Array.from({ length: 8 }, () => new Array(8).fill(null));
+  tableroFalso[4][3] = { tipo: "reina", color: "blanco" };
+  tableroFalso[4][4] = { tipo: "reina", color: "negro" };
+  t3d.actualizar(tableroFalso, { colorBlanco: formAjedrez.colorBlancas, colorNegro: formAjedrez.colorNegras });
+  t3d.resize();
 }
 
 construirSwatchesPiedra("swatches-blancas-ajedrez", "colorBlancas", formAjedrez, redibujarPreviewAjedrez, "swatch-pieza");
 construirSwatchesPiedra("swatches-negras-ajedrez", "colorNegras", formAjedrez, redibujarPreviewAjedrez, "swatch-pieza");
 construirSwatchesTablero("swatches-tablero-ajedrez", formAjedrez, redibujarPreviewAjedrez, PALETA_TABLEROS_AJEDREZ);
-construirSwatchesLuz("swatches-luz-ajedrez", formAjedrez);
-redibujarPreviewAjedrez();
+construirSwatchesLuz("swatches-luz-ajedrez", formAjedrez, redibujarPreviewAjedrez);
 
 $("#slider-nivel-ajedrez").style.setProperty("--pct", "0%");
 actualizarToggleNoResignAjedrez();
@@ -1079,7 +1088,7 @@ const formDamas = {
   luz: "azul",
 };
 
-function abrirModalDamas() { $("#modal-damas").classList.add("abierto"); }
+function abrirModalDamas() { $("#modal-damas").classList.add("abierto"); redibujarPreviewDamas(); }
 function cerrarModalDamas() { $("#modal-damas").classList.remove("abierto"); }
 $("#modal-damas-cerrar").addEventListener("click", cerrarModalDamas);
 $("#modal-damas").addEventListener("click", (e) => { if (e.target.id === "modal-damas") cerrarModalDamas(); });
@@ -1337,6 +1346,7 @@ function mostrarResultadoDamas() {
 function inicializarTablero3dDamas() {
   if (tablero3dDamas) return;
   tablero3dDamas = new DamasTablero3D($("#tablero-damas-madera"));
+  tablero3dDamas.habilitarLinternas();
   tablero3dDamas.onCasilla((x, y) => alClickCasillaDamas(x, y));
 }
 
@@ -1368,38 +1378,32 @@ function dibujarTableroDamas() {
 }
 
 // ---------------- selector de colores de pieza y tipo de tablero ----------------
+let previewDamas3D = null;
+function asegurarPreviewDamas3D() {
+  if (previewDamas3D) return previewDamas3D;
+  previewDamas3D = new DamasTablero3D($("#preview-tablero-damas"));
+  previewDamas3D._distancia = 6.2;
+  previewDamas3D._elevacion = 0.78;
+  previewDamas3D._azimut = 0.35;
+  previewDamas3D._zoomMin = 3.5;
+  previewDamas3D._zoomMax = 12;
+  return previewDamas3D;
+}
 function redibujarPreviewDamas() {
-  const cv = $("#preview-tablero-damas");
-  const ctx = cv.getContext("2d");
-  const w = cv.width, h = cv.height;
-  dibujarSwatchTablero(ctx, w, h, PALETA_TABLEROS_DAMAS[formDamas.tablero]);
-
-  const radio = h * 0.16;
-  const y = h * 0.54;
-  const posiciones = [0.14, 0.30, 0.46, 0.62, 0.78, 0.92];
-  posiciones.forEach((fx, i) => {
-    const cfg = PALETA_PIEDRAS[i % 2 === 0 ? formDamas.colorNegras : formDamas.colorBlancas];
-    const cvPieza = document.createElement("canvas");
-    const N = 80;
-    cvPieza.width = cvPieza.height = N;
-    dibujarMarmol(cvPieza.getContext("2d"), N, cfg);
-    const cy = y + (i % 2 === 0 ? -radio * 0.35 : radio * 0.35);
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.5)";
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.arc(w * fx, cy, radio, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(cvPieza, w * fx - radio, cy - radio, radio * 2, radio * 2);
-    ctx.restore();
-  });
+  const t3d = asegurarPreviewDamas3D();
+  t3d.cambiarTablero(formDamas.tablero);
+  t3d.setColorLuzInferior(PALETA_LUCES_INFERIOR[formDamas.luz].color);
+  const tableroFalso = Array.from({ length: 8 }, () => new Array(8).fill(null));
+  tableroFalso[4][3] = { color: "negro", dama: false };
+  tableroFalso[4][4] = { color: "blanco", dama: false };
+  t3d.actualizar(tableroFalso, { colorBlanco: formDamas.colorBlancas, colorNegro: formDamas.colorNegras });
+  t3d.resize();
 }
 
 construirSwatchesPiedra("swatches-blancas-damas", "colorBlancas", formDamas, redibujarPreviewDamas, "swatch-pieza");
 construirSwatchesPiedra("swatches-negras-damas", "colorNegras", formDamas, redibujarPreviewDamas, "swatch-pieza");
 construirSwatchesTablero("swatches-tablero-damas", formDamas, redibujarPreviewDamas, PALETA_TABLEROS_DAMAS);
-construirSwatchesLuz("swatches-luz-damas", formDamas);
-redibujarPreviewDamas();
+construirSwatchesLuz("swatches-luz-damas", formDamas, redibujarPreviewDamas);
 
 $("#slider-nivel-damas").style.setProperty("--pct", "0%");
 actualizarToggleNoResignDamas();
@@ -1433,7 +1437,7 @@ $("#toggle-sfx-damas").addEventListener("change", (e) => { sfxActivoAjedrez = e.
 // selector de cuántas tropas mover tras conquistar (mueve una cantidad
 // razonable sola): se prioriza que el loop completo sea jugable de punta a
 // punta antes que cubrir cada variante de las reglas de mesa.
-const formTeg = { cantidadJugadores: 3, bots: [false, true, true, true, true, true], nivel: 5, colorJugador: "azul" };
+const formTeg = { cantidadJugadores: 3, bots: [false, true, true, true, true, true], nivel: 5, colorJugador: "turquesa" };
 
 // El jugador humano (seat 0) elige su color; el resto de los asientos se
 // reparte los colores que quedan, en el mismo orden de siempre — así nunca
@@ -1564,7 +1568,7 @@ function inicializarMapaTeg() {
 
 function coloresJugadoresTeg() {
   const orden = coloresOrdenTeg();
-  return partidaTeg.jugadores.map((_, idx) => PALETA_JUGADORES_TEG[orden[idx]].color);
+  return partidaTeg.jugadores.map((_, idx) => PALETA_JUGADORES_TEG[orden[idx]].colorId);
 }
 
 function dibujarTeg() {
@@ -1839,10 +1843,21 @@ let tableroAjedrez2Activo = "rojoNegro";
 // jerárquico" que ya usan los sets de ajedrez de diseño.
 const ALTURA_ROL_AJEDREZ2 = { rey: 1.35, reina: 1.28, torre: 1.30, alfil: 1.12, caballo: 1.08, peon: 0.85 };
 const NOMBRE_ROL_AJEDREZ2 = { rey: "Rey", reina: "Reina", torre: "Torre", alfil: "Alfil", caballo: "Caballo", peon: "Peón" };
-// No todos los .fbx de origen traen el mismo "frente" — comprobado a mano,
-// plantando 4 copias de cada uno girada 0/90/180/270 una al lado de la
-// otra y mirando cuál queda de frente a la cámara en vez de de costado.
-const GIRO_EXTRA_PERSONAJE = { reinaBlanca: 180, alfilNegro: 180, peonBlanco: 90 };
+// No todos los .fbx de origen traen el mismo "frente". Medido con una
+// auditoría sistemática de los 12: captura de cada personaje en el
+// inspector con cámara fija en el eje +z y lectura visual de hacia dónde
+// mira (pedido explícito: "todas mirando al frente, como enfrentadas").
+// El valor es el giro que lleva el frente crudo del modelo a +z; el giro
+// de 180° del equipo negro se aplica aparte (ver ajedrez2_3d.js), así el
+// mismo valor sirve para los dos bandos. Los que no figuran ya vienen
+// mirando a +z (giro 0).
+const GIRO_EXTRA_PERSONAJE = {
+  peonBlanco: 90,    // frente crudo: -x
+  caballoNegro: 90,  // frente crudo: -x
+  alfilNegro: 90,    // frente crudo: -x
+  reinaBlanca: 270,  // frente crudo: +x
+  reyNegro: 270,     // frente crudo: +x
+};
 
 // tipo de pieza de js/chess.js (P/N/B/R/Q/K) + color → { id del personaje
 // (ver js/personajes/*.js), rol (para el alto y el nombre en el inspector) }.

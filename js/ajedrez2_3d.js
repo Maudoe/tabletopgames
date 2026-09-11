@@ -96,6 +96,41 @@ class Ajedrez2Tablero3D {
   // en vez de una llama de campamento normal, más una enredadera espinosa
   // que sube por el poste y otra que bordea el marco del tablero entero —
   // pedido explícito: "algo más místico o embrujado como una enredadera".
+
+  // Baya fosforescente: la esfera sola (MeshBasicMaterial) se veía como un
+  // punto verde plano, sin brillar de verdad — pedido explícito: "esas
+  // luces verdes deberían brillar un poco más". Cada una ahora es la
+  // esfera + un sprite aditivo detrás (mismo truco que el halo de la luna
+  // en board3d.js/chess3d.js: un gradiente radial en canvas, blending
+  // aditivo) que sí se lee como un resplandor de verdad, sin el costo de
+  // una PointLight real por baya (son ~60 en total, demasiadas luces).
+  _crearTexturaGlow(colorCentro, colorBorde) {
+    const N = 64;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = N;
+    const ctx = cv.getContext("2d");
+    const g = ctx.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+    g.addColorStop(0, colorCentro);
+    g.addColorStop(0.5, colorBorde);
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, N, N);
+    return new THREE.CanvasTexture(cv);
+  }
+
+  _crearBaya(matBaya, texGlowBaya, radio) {
+    const grupo = new THREE.Group();
+    const esfera = new THREE.Mesh(new THREE.SphereGeometry(radio, 8, 6), matBaya);
+    grupo.add(esfera);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: texGlowBaya, transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, opacity: 0.9, fog: false,
+    }));
+    halo.scale.setScalar(radio * 9);
+    grupo.add(halo);
+    return grupo;
+  }
+
   _crearAntorchas() {
     this._antorchas = [];
     const mitad = 4 + 0.34; // borde del marco (ver _crearTableroBase)
@@ -122,7 +157,8 @@ class Ajedrez2Tablero3D {
     const matRama = new THREE.MeshStandardMaterial({ color: 0x1c1712, roughness: 0.85, metalness: 0.1 });
     const matCuenco = new THREE.MeshStandardMaterial({ color: 0x2a231a, roughness: 0.55, metalness: 0.45 });
     const matHiedra = new THREE.MeshStandardMaterial({ color: 0x1c3320, roughness: 0.8, metalness: 0.05 });
-    const matBaya = new THREE.MeshBasicMaterial({ color: 0x8fe0a0, toneMapped: false });
+    const matBaya = new THREE.MeshBasicMaterial({ color: 0xbaffc8, toneMapped: false });
+    const texGlowBaya = this._crearTexturaGlow("rgba(200,255,215,0.95)", "rgba(120,255,150,0.55)");
 
     for (const [ex, ez] of esquinas) {
       const grupo = new THREE.Group();
@@ -185,7 +221,7 @@ class Ajedrez2Tablero3D {
         tramo.rotation.set(Math.random() * 0.4, ang, Math.PI / 2.3);
         grupo.add(tramo);
         if (i % 4 === 0) {
-          const baya = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), matBaya);
+          const baya = this._crearBaya(matBaya, texGlowBaya, 0.022);
           baya.position.set(Math.cos(ang) * (radio + 0.04), hy, Math.sin(ang) * (radio + 0.04));
           grupo.add(baya);
         }
@@ -226,7 +262,8 @@ class Ajedrez2Tablero3D {
     this.escena.add(tubo);
 
     const matHoja = new THREE.MeshStandardMaterial({ color: 0x2c4a2e, roughness: 0.7, side: THREE.DoubleSide });
-    const matBaya = new THREE.MeshBasicMaterial({ color: 0x8fe0a0, toneMapped: false });
+    const matBaya = new THREE.MeshBasicMaterial({ color: 0xbaffc8, toneMapped: false });
+    const texGlowBaya = this._crearTexturaGlow("rgba(200,255,215,0.95)", "rgba(120,255,150,0.55)");
     const geoHoja = new THREE.SphereGeometry(0.055, 6, 5);
     geoHoja.scale(1, 0.28, 1.7);
     for (let i = 0; i < 46; i++) {
@@ -237,7 +274,7 @@ class Ajedrez2Tablero3D {
       hoja.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
       this.escena.add(hoja);
       if (i % 5 === 0) {
-        const baya = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 6), matBaya);
+        const baya = this._crearBaya(matBaya, texGlowBaya, 0.026);
         baya.position.copy(p).add(new THREE.Vector3(0, 0.05, 0));
         this.escena.add(baya);
       }
